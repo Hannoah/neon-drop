@@ -394,13 +394,15 @@ async function testScenarioResponsivePolish(browser, url) {
 
   await page.emulateMedia({reducedMotion: 'reduce'});
   const reducedMotion = await page.evaluate(() => ({
-    campaignTransition: getComputedStyle(document.querySelector('#scenario-continue-btn')).transitionDuration,
+    modalAnimationName: getComputedStyle(document.querySelector('#scenario-map-screen')).animationName,
+    modalAnimationDuration: getComputedStyle(document.querySelector('#scenario-map-screen')).animationDuration,
     campaignGlow: getComputedStyle(document.querySelector('#scenario-continue-btn')).boxShadow,
     garbageTransition: getComputedStyle(document.querySelector('#player-garbage-meter')).transitionDuration,
   }));
   assert.deepEqual(reducedMotion, {
-    campaignTransition: '0s', campaignGlow: 'none', garbageTransition: '0s',
-  }, 'reduced motion must remove campaign motion/glow and garbage meter transitions');
+    modalAnimationName: 'none', modalAnimationDuration: '0s',
+    campaignGlow: 'none', garbageTransition: '0s',
+  }, 'reduced motion must remove campaign modal animation/glow and garbage meter transitions');
   assert.equal(pageErrors.length, 0, 'desktop campaign layout must not throw page errors');
   await page.close();
 

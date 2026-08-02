@@ -337,9 +337,6 @@
             background: #f1c40f;
             color: #161616;
         }
-        @media (prefers-reduced-motion: reduce) {
-            .modal { animation: none; }
-        }
         @media (max-height: 800px) {
             #game-container {
                 transform: none;
@@ -689,6 +686,7 @@
             #touch-controls:not([hidden]) { display: grid; }
         }
         @media (prefers-reduced-motion: reduce) {
+            .modal { animation: none; }
             .modal .campaign-card { box-shadow: none; transition: none; }
             .garbage-meter span { transition: none; }
         }

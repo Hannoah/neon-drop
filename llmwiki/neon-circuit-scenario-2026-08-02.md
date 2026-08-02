@@ -39,6 +39,7 @@ tags: gameplay, campaign, persistence, accessibility, testing
 
 ## 최종 검증
 
+- Task 7 커밋: `183b34f docs: finish Neon Circuit campaign`
 - `npm test`: Node 유닛 테스트 56개 통과, 브라우저 회귀 테스트 전체 통과, page error 0개
 - 1280×720 캠페인 맵: 문서 1280×720, 맵 684×468.35 (`x=298`, `y=125.82`), 5개 노드 `y=206.73`, 모든 액션이 화면 안에 위치
 - 1280×720 OVERLORD: Arena HUD 928×584 (`x=176`, `y=68`), AI·플레이어 보드 각각 244×404, 목표 문구 한 줄, 문서 스크롤 없음

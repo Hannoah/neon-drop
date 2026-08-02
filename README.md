@@ -46,4 +46,22 @@ Neon Circuit의 경로는 다음과 같습니다.
 
 ## 구조
 
-게임 상태와 입력은 `tetris.js`, 보드·점수·AI·오디오·렌더링·캠페인 규칙은 `src/js/`의 ES 모듈에 있습니다. 블록은 7-bag 방식으로 공급됩니다.
+게임 로직은 ES 모듈로 분리되어 있으며, `tetris.js`가 브라우저 진입점 역할을 합니다.
+
+```
+src/js/
+├── constants.js     # 상수 (피스 타입, 색상, 점수 테이블)
+├── board.js         # 보드/피스 유틸 (충돌, 회전, 병합, 7-bag)
+├── scoring.js       # 점수·Garbage 공격·B2B/콤보 계산
+├── ai.js            # AI 상대 휴리스틱 및 최적 수 탐색
+├── audio.js         # Web Audio API 기반 BGM/SFX
+├── renderer.js      # Canvas 렌더링 (보드, Next, Hold, 상대 보드)
+├── leaderboard.js   # localStorage 리더보드 읽기/쓰기/렌더
+└── scenario.js      # 캠페인 스테이지·진행도·업그레이드 규칙
+```
+
+`tetris.js`는 DOM 참조, 게임 상태, 게임 루프, 입력 처리를 담당하며 테스트가 필요한 상태와 함수를 브라우저에 노출합니다. 블록은 7-bag 방식으로 공급됩니다.
+
+## 보안 주의
+
+`.env` 파일은 `.gitignore`에 등록되어 있으며 저장소에 커밋되지 않습니다. GitHub 액세스 토큰 등의 비밀값을 저장소에 커밋하지 마세요.
