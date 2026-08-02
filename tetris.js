@@ -718,6 +718,10 @@ function update(time = 0) {
     lastTime = time;
 
     elapsedTime += Math.max(0, deltaTime);
+    if (eventMessageTimer > 0) {
+        eventMessageTimer -= deltaTime;
+        if (eventMessageTimer <= 0) lastEventMessage = '';
+    }
     updateScenarioState(Math.max(0, deltaTime));
     if (scenarioResolved) return;
     dropCounter += deltaTime;
@@ -735,11 +739,6 @@ function update(time = 0) {
     if (comboTimer > 0) {
         comboTimer -= deltaTime;
         if (comboTimer <= 0) combo = 0;
-    }
-
-    if (eventMessageTimer > 0) {
-        eventMessageTimer -= deltaTime;
-        if (eventMessageTimer <= 0) lastEventMessage = '';
     }
 
     updateScore();

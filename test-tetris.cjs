@@ -362,14 +362,40 @@ async function testScenarioLineStages(browser, url) {
     stage: activeScenarioStage?.id,
     objective: document.querySelector('#scenario-objective')?.textContent,
     objectiveVisible: document.querySelector('#scenario-objective')?.hidden === false,
-  })), {stage: 1, objective: 'OBJECTIVE 0 / 8', objectiveVisible: true},
+    ratingLabel: document.querySelector('#scenario-result-stars')?.getAttribute('aria-label'),
+  })), {
+    stage: 1, objective: 'OBJECTIVE 0 / 8', objectiveVisible: true, ratingLabel: 'Stage rating',
+  },
   'stage 1 must start through briefing with a visible line objective');
+
+  const resultContract = await page.evaluate(() => {
+    const firstCompletion = completeScenarioStage();
+    const completionDetail = document.querySelector('#scenario-result-detail').textContent;
+    elapsedTime = 999999;
+    const repeatedCompletion = completeScenarioStage();
+    const completionUnchanged = document.querySelector('#scenario-result-detail').textContent === completionDetail;
+    startScenarioStage(1);
+    const firstFailure = failScenarioStage('FIRST FAILURE');
+    const repeatedFailure = failScenarioStage('SECOND FAILURE');
+    return {
+      firstCompletion, repeatedCompletion, completionUnchanged,
+      firstFailure, repeatedFailure,
+      failureTitle: document.querySelector('#scenario-result-title').textContent,
+    };
+  });
+  assert.deepEqual(resultContract, {
+    firstCompletion: true, repeatedCompletion: false, completionUnchanged: true,
+    firstFailure: true, repeatedFailure: false, failureTitle: 'FIRST FAILURE',
+  }, 'scenario result functions must resolve once and reject later rewrites');
+  await page.locator('#scenario-retry-btn').click();
 
   const progressBefore = await page.evaluate(() => JSON.stringify(scenarioProgress));
   const completed = await page.evaluate(() => {
     player.lines = 7;
     scoreLines(1, false);
-    completeScenarioStage();
+    const detail = document.querySelector('#scenario-result-detail').textContent;
+    elapsedTime = 999999;
+    const repeated = completeScenarioStage();
     return {
       lines: player.lines,
       resolved: scenarioResolved,
@@ -379,6 +405,8 @@ async function testScenarioLineStages(browser, url) {
       resultVisible: document.querySelector('#scenario-result-screen')?.style.display !== 'none',
       focused: document.activeElement?.id,
       progress: JSON.stringify(scenarioProgress),
+      repeated,
+      detailUnchanged: document.querySelector('#scenario-result-detail').textContent === detail,
     };
   });
   assert.equal(completed.lines, 8);
@@ -388,6 +416,8 @@ async function testScenarioLineStages(browser, url) {
   assert.equal(completed.objective, 'OBJECTIVE 8 / 8');
   assert.equal(completed.resultVisible, true);
   assert.equal(completed.focused, 'scenario-retry-btn');
+  assert.equal(completed.repeated, false, 'a resolved stage must reject repeated completion');
+  assert.equal(completed.detailUnchanged, true, 'repeated completion must not rewrite result content');
   assert.equal(completed.progress, progressBefore,
     'Task 4 completion must not unlock, rate, or persist a result');
 
@@ -445,9 +475,17 @@ async function testScenarioLineStages(browser, url) {
     'scenario ramps and Cryo must apply only in campaign while Marathon keeps its normal step');
 
   const hazard = await page.evaluate(() => {
+    window.requestAnimationFrame = () => 777;
+    window.cancelAnimationFrame = () => {};
     gameMode = 'scenario';
     startScenarioStage(3);
     const interval = scenarioHazardTimer;
+    const hazardFrameTime = performance.now() + interval;
+    update(hazardFrameTime);
+    const createdByUpdate = {event: lastEventMessage, timer: eventMessageTimer};
+    update(hazardFrameTime + 500);
+    const decayedByNextUpdate = {event: lastEventMessage, timer: eventMessageTimer};
+    startScenarioStage(3);
     isPaused = true;
     updateScenarioState(1000);
     const paused = {timer: scenarioHazardTimer, pending: playerPendingGarbage};
@@ -469,10 +507,15 @@ async function testScenarioLineStages(browser, url) {
     gameMode = 'marathon';
     playerPendingGarbage = 0;
     queueGarbageForPlayer(1);
-    return {interval, paused, queued, applied, marathonPending: playerPendingGarbage};
+    return {
+      interval, createdByUpdate, decayedByNextUpdate, paused, queued, applied,
+      marathonPending: playerPendingGarbage,
+    };
   });
   assert.deepEqual(hazard, {
     interval: 30000,
+    createdByUpdate: {event: 'INTERFERENCE +1', timer: 2000},
+    decayedByNextUpdate: {event: 'INTERFERENCE +1', timer: 1500},
     paused: {timer: 30000, pending: 0},
     queued: {timer: 30000, pending: 1, event: 'INTERFERENCE +1', eventTimer: 2000},
     applied: {pending: 0, garbageLines: 11},
