@@ -106,7 +106,7 @@ async function testModalAccessibility(browser, url) {
     labelledBy: 'start-screen-title',
     gameInert: true,
     touchInert: true,
-    focused: 'start-game-btn',
+    focused: 'scenario-continue-btn',
   });
   assert.equal(pageErrors.length, 0, 'opening the start dialog must not throw');
   await page.close();
@@ -179,7 +179,7 @@ async function testExitGame(browser, url) {
   });
 
   await page.getByRole('button', { name: 'Start Game' }).click();
-  await page.getByRole('button', { name: 'Exit Game' }).click();
+  await page.locator('#exit-game-btn').click();
   await page.waitForTimeout(100);
 
   assert.deepEqual(dialogs, ['confirm'], 'Exit Game must use only one confirmation dialog');
@@ -188,6 +188,50 @@ async function testExitGame(browser, url) {
   assert.equal(await page.evaluate(() => player.matrix), null, 'Exit Game must reset the active piece');
   assert.equal(page.url(), url, 'Exit Game must keep the game page open');
   assert.equal(pageErrors.length, 0, 'Exit Game must not throw');
+  await page.close();
+}
+
+async function testCampaignMenuExit(browser, url) {
+  const { page, pageErrors } = await openPage(browser, url);
+
+  assert.equal(await page.getByRole('button', { name: /Continue Campaign.*Neon Circuit/i }).count(), 1,
+    'the initial menu must offer Continue Campaign for Neon Circuit');
+  assert.equal(await page.locator('#start-screen #menu-exit-btn').getAttribute('aria-label'), 'Exit Game',
+    'the initial-menu Exit Game action must use its own ID');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'scenario-continue-btn',
+    'the campaign card must receive initial dialog focus');
+
+  await page.evaluate(() => { window.confirm = () => false; });
+  await page.locator('#menu-exit-btn').click();
+  assert.equal(await page.locator('#start-screen').isVisible(), true,
+    'cancelling application exit must keep the menu visible');
+  assert.equal(await page.locator('#exit-screen').isVisible(), false,
+    'cancelling application exit must not reveal the fallback screen');
+
+  await page.getByRole('button', { name: 'Start Game' }).click();
+  assert.equal(await page.evaluate(() => isBgmRunning()), true,
+    'safe exit must stop a running BGM');
+  await page.evaluate(() => returnToMenu());
+  await page.evaluate(() => {
+    window.confirm = () => true;
+    window.close = () => {};
+  });
+  await page.locator('#menu-exit-btn').click();
+  await page.locator('#exit-screen').waitFor({ state: 'visible' });
+
+  assert.deepEqual(await page.evaluate(() => ({
+    animationFrameId,
+    bgmRunning: isBgmRunning(),
+    focused: document.activeElement?.id,
+  })), { animationFrameId: null, bgmRunning: false, focused: 'exit-return-btn' },
+  'safe exit must stop gameplay and focus the fallback action');
+
+  await page.locator('#exit-return-btn').click();
+  assert.equal(await page.locator('#start-screen').isVisible(), true,
+    'Return to Menu must restore the initial menu');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'scenario-continue-btn',
+    'Return to Menu must restore campaign-card focus');
+  assert.equal(pageErrors.length, 0, 'campaign menu exit must not throw');
   await page.close();
 }
 
@@ -802,6 +846,7 @@ async function testUsabilityUI(browser, url) {
 
     await testInputGuards(browser, url);
     await testKeyboardModeStart(browser, url);
+    await testCampaignMenuExit(browser, url);
     await testModalAccessibility(browser, url);
     await testPreferencePersistence(browser, url);
     await testAnimationFrameScheduling(browser, url);

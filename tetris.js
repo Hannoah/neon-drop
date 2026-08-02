@@ -41,6 +41,7 @@ const linesElement = document.getElementById('lines');
 const leaderboardElement = document.getElementById('leaderboard');
 const modalOverlay = document.getElementById('modal-overlay');
 const startScreen = document.getElementById('start-screen');
+const exitScreen = document.getElementById('exit-screen');
 const gameOverScreen = document.getElementById('game-over-screen');
 const leaderboardScreen = document.getElementById('leaderboard-screen');
 const finalScoreElement = document.getElementById('final-score');
@@ -48,7 +49,10 @@ const gameOverTitleElement = document.getElementById('game-over-title');
 const nicknameInput = document.getElementById('nickname');
 const saveScoreBtn = document.getElementById('save-score-btn');
 const startGameBtn = document.getElementById('start-game-btn');
+const scenarioContinueBtn = document.getElementById('scenario-continue-btn');
 const viewLeaderboardBtn = document.getElementById('view-leaderboard-btn');
+const menuExitBtn = document.getElementById('menu-exit-btn');
+const exitReturnBtn = document.getElementById('exit-return-btn');
 const closeLeaderboardBtn = document.getElementById('close-leaderboard-btn');
 const leaderboardList = document.getElementById('leaderboard-list');
 const exitGameBtn = document.getElementById('exit-game-btn');
@@ -593,8 +597,23 @@ function showStartScreen() {
     pauseScreen.style.display = 'none';
     gameOverScreen.style.display = 'none';
     leaderboardScreen.style.display = 'none';
+    exitScreen.style.display = 'none';
     startScreen.style.display = 'block';
-    openModal('start-screen-title', startGameBtn);
+    openModal('start-screen-title', scenarioContinueBtn);
+}
+
+function exitApplication() {
+    if (!window.confirm('Neon Drop을 종료하시겠습니까?')) return;
+    cancelScheduledUpdate();
+    stopBGM();
+    isGameOver = true;
+    window.close();
+    setTimeout(() => {
+        if (window.closed) return;
+        startScreen.style.display = 'none';
+        exitScreen.style.display = 'block';
+        openModal('exit-screen-title', exitReturnBtn);
+    }, 0);
 }
 
 function showPauseScreen() {
@@ -706,6 +725,9 @@ viewLeaderboardBtn.addEventListener('click', () => {
 closeLeaderboardBtn.addEventListener('click', () => {
     showStartScreen();
 });
+
+menuExitBtn.addEventListener('click', exitApplication);
+exitReturnBtn.addEventListener('click', showStartScreen);
 
 resumeGameBtn.addEventListener('click', () => {
     isPaused = false;
@@ -892,7 +914,7 @@ const exposed = {
     shuffleBag, emitMatchEvent, playerReset, playerHold, playerMove,
     playerRotate, playerDrop, playerHardDrop, lockPiece, lockCurrentPiece,
     queueGarbageForOpponent, queueGarbageForPlayer, runOpponentTurn,
-    checkSprintCompletion, showHighScoreModal, showStartScreen, showPauseScreen,
+    checkSprintCompletion, showHighScoreModal, showStartScreen, showPauseScreen, exitApplication,
     togglePause, quitGame, returnToMenu, selectGameMode, canAcceptGameInput, update, formatElapsedTime,
     themeMelody, themeMelodyName,
     isBgmRunning: isBGMRunning,
@@ -913,6 +935,7 @@ const liveState = {
     flashingLines: [() => flashingLines, (v) => { flashingLines = v; }],
     gameMode: [() => gameMode, (v) => { gameMode = v; }],
     shakeTime: [() => shakeTime, (v) => { shakeTime = v; }],
+    animationFrameId: [() => animationFrameId, (v) => { animationFrameId = v; }],
 };
 
 for (const [name, value] of Object.entries(exposed)) {

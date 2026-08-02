@@ -247,6 +247,23 @@
             background: rgba(241, 196, 15, 0.16);
             box-shadow: inset 0 0 0 1px rgba(241, 196, 15, 0.45);
         }
+        .modal .campaign-card {
+            display: block;
+            width: 100%;
+            margin: 14px 0 12px;
+            padding: 16px;
+            border: 1px solid var(--player);
+            border-radius: 10px;
+            background: linear-gradient(135deg, rgba(36, 216, 255, 0.2), rgba(17, 29, 45, 0.96));
+            color: #f6fbff;
+            box-shadow: inset 0 0 24px rgba(36, 216, 255, 0.1);
+        }
+        .campaign-card span, .campaign-card strong, .campaign-card small { display: block; }
+        .campaign-card span { color: var(--player); font-size: 11px; letter-spacing: 0.16em; }
+        .campaign-card strong { margin: 5px 0; font-size: 20px; letter-spacing: 0.08em; }
+        .campaign-card small { color: var(--hud-muted); font-size: 11px; }
+        .menu-secondary-actions { display: flex; gap: 8px; justify-content: center; }
+        .modal .menu-secondary-actions button { flex: 1; }
         .secondary-panel summary {
             color: #d6e7f5;
             cursor: pointer;
@@ -721,6 +738,10 @@
         <div id="start-screen" class="modal" style="display: block;">
             <h2 id="start-screen-title">NEON DROP</h2>
             <p style="color: #c4ced7; margin-bottom: 14px;">Choose a mode and start playing.</p>
+            <button id="scenario-continue-btn" class="campaign-card" type="button">
+                <span>CONTINUE CAMPAIGN</span><strong>NEON CIRCUIT</strong>
+                <small id="scenario-continue-detail">STAGE 01 · BYTE</small>
+            </button>
             <label for="game-mode" class="visually-hidden">Game mode</label>
             <select id="game-mode" class="visually-hidden" aria-label="Game mode">
                 <option value="marathon">Marathon</option>
@@ -733,7 +754,16 @@
                 <button type="button" class="mode-card" data-mode-card="versus" data-mode="versus" aria-pressed="false">Versus AI<span>Send garbage to your rival</span></button>
             </div>
             <button id="start-game-btn">Start Game</button>
-            <button id="view-leaderboard-btn" style="background: #3498db; margin-left: 10px;">Leaderboard</button>
+            <div class="menu-secondary-actions">
+                <button id="view-leaderboard-btn" type="button" style="background: #3498db;">Leaderboard</button>
+                <button id="menu-exit-btn" class="btn-exit" type="button" aria-label="Exit Game">Exit Game</button>
+            </div>
+        </div>
+
+        <div id="exit-screen" class="modal" style="display:none;">
+            <h2 id="exit-screen-title">SYSTEM OFFLINE</h2>
+            <p>Neon Drop has ended. You may close this tab.</p>
+            <button id="exit-return-btn" type="button">Return to Menu</button>
         </div>
 
         <!-- High Score / Game Over Screen -->
