@@ -262,11 +262,23 @@ function closeModal() {
 }
 
 const scenarioCopy = {
-    1: {objective: 'Clear 8 lines.', modifier: 'Standard drop speed.'},
-    2: {objective: 'Clear 15 lines before time expires.', modifier: 'Faster drop speed · 02:30 limit.'},
-    3: {objective: 'Clear 18 lines.', modifier: 'Interference every 30 seconds.'},
-    4: {objective: 'Defeat MIRROR.', modifier: 'One opponent turn per lock.'},
-    5: {objective: 'Defeat OVERLORD.', modifier: 'Two opponent turns per lock · interference every 45 seconds.'},
+    1: stage => ({objective: `Clear ${stage.lineGoal} lines.`, modifier: 'Standard drop speed.'}),
+    2: stage => ({
+        objective: `Clear ${stage.lineGoal} lines before time expires.`,
+        modifier: `Faster drop speed · ${formatElapsedTime(stage.timeLimitMs)} limit.`,
+    }),
+    3: stage => ({
+        objective: `Clear ${stage.lineGoal} lines.`,
+        modifier: `Interference every ${stage.hazardIntervalMs / 1000} seconds.`,
+    }),
+    4: stage => ({
+        objective: `Defeat ${stage.rival}.`,
+        modifier: `${stage.opponentTurns === 1 ? 'One' : stage.opponentTurns} opponent turn${stage.opponentTurns === 1 ? '' : 's'} per lock.`,
+    }),
+    5: stage => ({
+        objective: `Defeat ${stage.rival}.`,
+        modifier: `${stage.opponentTurns} opponent turns per lock · interference every ${stage.hazardIntervalMs / 1000} seconds.`,
+    }),
 };
 
 function hideModalScreens() {
@@ -311,7 +323,7 @@ function renderScenarioMap() {
     scenarioStageList.replaceChildren(...buttons);
 
     const stage = SCENARIO_STAGES.find(candidate => candidate.id === selectedScenarioStageId);
-    const copy = scenarioCopy[stage.id];
+    const copy = scenarioCopy[stage.id](stage);
     const result = scenarioProgress.results[stage.id];
     scenarioStageRival.textContent = `RIVAL · ${stage.rival}`;
     scenarioStageName.textContent = `STAGE ${String(stage.id).padStart(2, '0')} · ${stage.name}`;
@@ -333,7 +345,7 @@ function showScenarioBriefing() {
     if (!canPlayScenarioStage(scenarioProgress, selectedScenarioStageId)) return false;
     const stage = SCENARIO_STAGES.find(candidate => candidate.id === selectedScenarioStageId);
     if (!stage) return false;
-    const copy = scenarioCopy[stage.id];
+    const copy = scenarioCopy[stage.id](stage);
     scenarioBriefingRival.textContent = stage.rival;
     scenarioBriefingName.textContent = stage.name;
     scenarioBriefingObjective.textContent = copy.objective;
@@ -846,7 +858,10 @@ startGameBtn.addEventListener('click', () => {
     scheduleUpdate();
 });
 
-scenarioContinueBtn.addEventListener('click', showScenarioMap);
+scenarioContinueBtn.addEventListener('click', () => {
+    selectedScenarioStageId = scenarioProgress.unlockedStage;
+    showScenarioMap();
+});
 scenarioPlayBtn.addEventListener('click', showScenarioBriefing);
 scenarioMapBackBtn.addEventListener('click', showStartScreen);
 scenarioBriefingBackBtn.addEventListener('click', showScenarioMap);

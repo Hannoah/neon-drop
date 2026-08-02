@@ -216,6 +216,11 @@ async function testScenarioMap(browser, url) {
     objective: 'Clear 15 lines before time expires.',
     modifier: 'Faster drop speed · 02:30 limit.',
   });
+  assert.equal(await page.evaluate(() => {
+    const stage = SCENARIO_STAGES.find(candidate => candidate.id === 2);
+    return document.querySelector('#scenario-briefing-objective').textContent.includes(String(stage.lineGoal))
+      && document.querySelector('#scenario-briefing-modifier').textContent.includes(formatElapsedTime(stage.timeLimitMs));
+  }), true, 'stage 2 briefing copy must use its scenario definition values');
   await page.locator('#scenario-briefing-back-btn').click();
   assert.equal(await page.locator('#scenario-map-screen').isVisible(), true);
   await page.locator('#scenario-play-btn').click();
@@ -276,7 +281,72 @@ async function testScenarioMap(browser, url) {
   assert.equal(reset.selected, 1);
   assert.equal(reset.preferences, preserved.preferences, 'New Campaign must preserve quick-play preferences');
   assert.equal(reset.leaderboard, preserved.leaderboard, 'New Campaign must preserve the leaderboard');
+
+  await page.reload();
+  assert.equal(await page.locator('#scenario-continue-detail').innerText(), 'STAGE 01 · BYTE',
+    'confirmed New Campaign progress must survive reload');
+  await page.locator('#scenario-continue-btn').click();
+  assert.deepEqual(await page.locator('[data-scenario-stage]').evaluateAll(buttons => buttons.map(button => !button.disabled)),
+    [true, false, false, false, false], 'reloaded reset progress must still unlock stage 1 only');
+  assert.equal(await page.evaluate(() => localStorage.getItem('neonDropPreferences')), preserved.preferences);
+  assert.equal(await page.evaluate(() => localStorage.getItem('tetrisLeaderboard')), preserved.leaderboard);
   assert.equal(pageErrors.length, 0, 'campaign map and briefing interactions must not throw');
+  await page.close();
+}
+
+async function testScenarioMapNavigation(browser, url) {
+  const { page, pageErrors } = await openPage(browser, url);
+  await page.evaluate(() => localStorage.setItem('neonDropScenario', JSON.stringify({
+    version: 1, unlockedStage: 3, results: {},
+    upgrades: {pulse: 0, cryo: 0, firewall: 0}, pendingRewardStage: null, completed: false,
+  })));
+  await page.reload();
+  await page.locator('#scenario-continue-btn').click();
+  await page.locator('[data-scenario-stage="1"]').click();
+  await page.locator('#scenario-map-back-btn').click();
+  await page.locator('#scenario-continue-btn').click();
+  assert.equal(await page.locator('[data-scenario-stage="3"]').getAttribute('aria-current'), 'step',
+    'Continue must return to the highest unlocked stage');
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.scenarioStage), '3',
+    'Continue must focus the highest unlocked stage');
+
+  await page.evaluate(() => localStorage.removeItem('neonDropScenario'));
+  await page.setViewportSize({width: 360, height: 640});
+  await page.reload();
+  await page.locator('#scenario-continue-btn').click();
+  const mapScroll = await page.locator('#scenario-map-screen').evaluate(element => ({
+    overflowY: getComputedStyle(element).overflowY,
+    scrollHeight: element.scrollHeight,
+    clientHeight: element.clientHeight,
+  }));
+  assert.equal(mapScroll.overflowY, 'auto', 'portrait campaign maps must provide their own vertical scroll');
+  assert.ok(mapScroll.scrollHeight > mapScroll.clientHeight, 'portrait campaign map content must overflow into scrolling');
+
+  await page.evaluate(() => { window.confirm = () => false; });
+  for (const selector of ['#scenario-reset-btn', '#scenario-play-btn']) {
+    const action = page.locator(selector);
+    await action.scrollIntoViewIfNeeded();
+    const bounds = await action.evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      return {top: rect.top, bottom: rect.bottom, viewportHeight: innerHeight};
+    });
+    assert.ok(bounds.top >= 0 && bounds.bottom <= bounds.viewportHeight,
+      `${selector} must scroll fully into the portrait viewport`);
+    await action.click();
+  }
+  assert.equal(await page.locator('#scenario-briefing-screen').isVisible(), true);
+  await page.locator('#scenario-briefing-back-btn').click();
+  const menuAction = page.locator('#scenario-map-back-btn');
+  await menuAction.scrollIntoViewIfNeeded();
+  const menuBounds = await menuAction.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    return {top: rect.top, bottom: rect.bottom, viewportHeight: innerHeight};
+  });
+  assert.ok(menuBounds.top >= 0 && menuBounds.bottom <= menuBounds.viewportHeight,
+    'Main Menu must scroll fully into the portrait viewport');
+  await menuAction.click();
+  assert.equal(await page.locator('#start-screen').isVisible(), true);
+  assert.equal(pageErrors.length, 0, 'portrait campaign navigation must not throw');
   await page.close();
 }
 
@@ -1038,6 +1108,7 @@ async function testUsabilityUI(browser, url) {
     await testModalAccessibility(browser, url);
     await testPreferencePersistence(browser, url);
     await testScenarioMap(browser, url);
+    await testScenarioMapNavigation(browser, url);
     await testAnimationFrameScheduling(browser, url);
     await testExitGame(browser, url);
     await testLayoutSizing(browser, url);
