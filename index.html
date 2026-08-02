@@ -203,8 +203,11 @@
             font: inherit;
         }
         button:focus-visible, select:focus-visible, summary:focus-visible, input:focus-visible {
-            outline: 3px solid #8fd3ff;
+            outline: 3px solid var(--player);
             outline-offset: 3px;
+        }
+        #menu-exit-btn:focus-visible, #exit-game-btn:focus-visible, .btn-exit:focus-visible {
+            outline-color: var(--rival);
         }
         .mode-options {
             display: grid;
@@ -279,6 +282,13 @@
         }
         .modal #scenario-stage-list button[aria-current="step"] {
             box-shadow: inset 0 0 0 3px #fff;
+        }
+        .modal #scenario-stage-list button[aria-current="step"]::after {
+            content: "CURRENT" / "";
+            display: block;
+            margin-top: 3px;
+            font-size: 9px;
+            letter-spacing: 0.12em;
         }
         .modal button:disabled { cursor: not-allowed; opacity: 0.45; }
         #scenario-stage-detail, #scenario-briefing-screen dl {
@@ -677,6 +687,10 @@
             #match-footer { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .status-chip { min-height: 52px; }
             #touch-controls:not([hidden]) { display: grid; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .modal .campaign-card { box-shadow: none; transition: none; }
+            .garbage-meter span { transition: none; }
         }
     </style>
 </head>

@@ -350,6 +350,127 @@ async function testScenarioMapNavigation(browser, url) {
   await page.close();
 }
 
+async function testScenarioResponsivePolish(browser, url) {
+  const { page, pageErrors } = await openPage(browser, url);
+  await page.setViewportSize({width: 1280, height: 720});
+  await page.evaluate(() => localStorage.removeItem('neonDropScenario'));
+  await page.reload();
+  await page.locator('#scenario-continue-btn').click();
+
+  const desktop = await page.evaluate(() => {
+    const map = document.querySelector('#scenario-map-screen').getBoundingClientRect();
+    const stages = [...document.querySelectorAll('[data-scenario-stage]')];
+    const stageTops = stages.map(button => button.getBoundingClientRect().top);
+    const actions = ['#scenario-play-btn', '#scenario-map-back-btn', '#scenario-reset-btn']
+      .map(selector => {
+        const element = document.querySelector(selector);
+        const rect = element.getBoundingClientRect();
+        return {selector, top: rect.top, bottom: rect.bottom, visible: element.checkVisibility()};
+      });
+    return {
+      scrollWidth: document.documentElement.scrollWidth,
+      scrollHeight: document.documentElement.scrollHeight,
+      map: {top: map.top, bottom: map.bottom},
+      stageTops,
+      actions,
+      current: document.querySelector('[data-scenario-stage][aria-current="step"]')?.dataset.scenarioStage,
+      lockedDisabled: document.querySelector('[data-scenario-stage="2"]')?.disabled,
+    };
+  });
+  assert.ok(desktop.scrollWidth <= 1280 && desktop.scrollHeight <= 720,
+    `1280x720 campaign map must not scroll the document: ${JSON.stringify(desktop)}`);
+  assert.ok(desktop.map.top >= 0 && desktop.map.bottom <= 720,
+    `campaign map must fit the desktop viewport: ${JSON.stringify(desktop.map)}`);
+  assert.ok(Math.max(...desktop.stageTops) - Math.min(...desktop.stageTops) <= 4,
+    'all five desktop stages must share one route row');
+  assert.ok(desktop.actions.every(action => action.visible && action.top >= 0 && action.bottom <= 720),
+    `campaign map actions must remain in the viewport: ${JSON.stringify(desktop.actions)}`);
+  assert.equal(desktop.current, '1', 'the selected stage must expose aria-current=step');
+  assert.equal(desktop.lockedDisabled, true, 'locked stages must remain natively disabled');
+
+  await page.locator('[data-scenario-stage="1"]').focus();
+  assert.notEqual(await page.locator('[data-scenario-stage="1"]').evaluate(element =>
+    getComputedStyle(element).outlineWidth), '0px', 'keyboard focus must have a visible outline');
+
+  await page.emulateMedia({reducedMotion: 'reduce'});
+  const reducedMotion = await page.evaluate(() => ({
+    campaignTransition: getComputedStyle(document.querySelector('#scenario-continue-btn')).transitionDuration,
+    campaignGlow: getComputedStyle(document.querySelector('#scenario-continue-btn')).boxShadow,
+    garbageTransition: getComputedStyle(document.querySelector('#player-garbage-meter')).transitionDuration,
+  }));
+  assert.deepEqual(reducedMotion, {
+    campaignTransition: '0s', campaignGlow: 'none', garbageTransition: '0s',
+  }, 'reduced motion must remove campaign motion/glow and garbage meter transitions');
+  assert.equal(pageErrors.length, 0, 'desktop campaign layout must not throw page errors');
+  await page.close();
+
+  const context = await browser.newContext({
+    viewport: {width: 390, height: 844},
+    hasTouch: true,
+    isMobile: true,
+  });
+  const mobilePage = await context.newPage();
+  const mobileErrors = [];
+  mobilePage.on('pageerror', error => mobileErrors.push(error));
+  await mobilePage.goto(url);
+  await mobilePage.evaluate(() => localStorage.removeItem('neonDropScenario'));
+  await mobilePage.reload();
+  await mobilePage.locator('#scenario-continue-btn').click();
+
+  const mobile = await mobilePage.evaluate(() => {
+    const map = document.querySelector('#scenario-map-screen');
+    const tops = [...document.querySelectorAll('[data-scenario-stage]')]
+      .map(button => button.getBoundingClientRect().top);
+    return {
+      coarse: matchMedia('(pointer: coarse)').matches,
+      tops,
+      scrollHeight: map.scrollHeight,
+      clientHeight: map.clientHeight,
+      overflowY: getComputedStyle(map).overflowY,
+    };
+  });
+  assert.equal(mobile.coarse, true, 'mobile regression context must exercise coarse-pointer CSS');
+  assert.ok(mobile.tops.every((top, index) => index === 0 || top > mobile.tops[index - 1]),
+    `mobile stage nodes must stack in one column: ${JSON.stringify(mobile.tops)}`);
+  assert.equal(mobile.overflowY, 'auto', 'mobile campaign overflow must stay inside the modal');
+  assert.ok(mobile.scrollHeight > mobile.clientHeight,
+    'mobile campaign actions must overflow into the modal scroll region');
+
+  const lastAction = mobilePage.locator('#scenario-reset-btn');
+  await lastAction.scrollIntoViewIfNeeded();
+  const lastActionRect = await lastAction.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    return {top: rect.top, bottom: rect.bottom, viewportHeight: innerHeight};
+  });
+  assert.ok(lastActionRect.top >= 0 && lastActionRect.bottom <= lastActionRect.viewportHeight,
+    `the last map action must scroll fully into view: ${JSON.stringify(lastActionRect)}`);
+
+  await mobilePage.locator('#scenario-play-btn').scrollIntoViewIfNeeded();
+  await mobilePage.locator('#scenario-play-btn').click();
+  await mobilePage.locator('#scenario-stage-start-btn').scrollIntoViewIfNeeded();
+  await mobilePage.locator('#scenario-stage-start-btn').click();
+  const mobileGame = await mobilePage.evaluate(() => {
+    const objective = document.querySelector('#scenario-objective');
+    const rect = objective.getBoundingClientRect();
+    const header = document.querySelector('#arena-header').getBoundingClientRect();
+    return {
+      objectiveVisible: objective.checkVisibility(),
+      objectiveText: objective.textContent,
+      objectiveInsideHeader: rect.left >= header.left && rect.right <= header.right
+        && rect.top >= header.top && rect.bottom <= header.bottom,
+      touchControlsVisible: document.querySelector('#touch-controls').checkVisibility(),
+    };
+  });
+  assert.deepEqual(mobileGame, {
+    objectiveVisible: true,
+    objectiveText: 'OBJECTIVE 0 / 8',
+    objectiveInsideHeader: true,
+    touchControlsVisible: true,
+  }, 'mobile campaign gameplay must keep the objective and touch controls usable');
+  assert.equal(mobileErrors.length, 0, 'mobile campaign layout must not throw page errors');
+  await context.close();
+}
+
 async function testScenarioLineStages(browser, url) {
   const { page, pageErrors } = await openPage(browser, url);
   await page.evaluate(() => localStorage.removeItem('neonDropScenario'));
@@ -2027,6 +2148,7 @@ async function testUsabilityUI(browser, url) {
     await testPreferencePersistence(browser, url);
     await testScenarioMap(browser, url);
     await testScenarioMapNavigation(browser, url);
+    await testScenarioResponsivePolish(browser, url);
     await testScenarioRewards(browser, url);
     await testScenarioLineStages(browser, url);
     await testAnimationFrameScheduling(browser, url);
