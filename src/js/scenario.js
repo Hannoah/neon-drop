@@ -61,9 +61,14 @@ export function normalizeScenarioProgress(value) {
         cryo: validUpgradeStack(upgrades.cryo),
         firewall: validUpgradeStack(upgrades.firewall),
     };
-    progress.pendingRewardStage = Number.isInteger(value.pendingRewardStage)
-        && value.pendingRewardStage >= 1 && value.pendingRewardStage <= 4 ? value.pendingRewardStage : null;
-    progress.completed = value.completed === true;
+    progress.completed = value.completed === true && progress.unlockedStage === 5 && Boolean(progress.results[5]);
+    const pending = value.pendingRewardStage;
+    const earnedRewards = Object.keys(progress.results).filter(stage => Number(stage) <= 4).length;
+    const spentRewards = Object.values(progress.upgrades).reduce((sum, stack) => sum + stack, 0);
+    progress.pendingRewardStage = Number.isInteger(pending) && pending >= 1 && pending <= 4
+        && !progress.completed && progress.unlockedStage >= pending + 1 && Boolean(progress.results[pending])
+        && spentRewards === earnedRewards - 1 && Object.values(progress.upgrades).some(stack => stack < 4)
+        ? pending : null;
     return progress;
 }
 

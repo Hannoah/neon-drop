@@ -269,7 +269,43 @@ async function testScenarioMap(browser, url) {
     'cancelling New Campaign must keep progress');
   assert.equal(await page.evaluate(() => window.__scenarioResetPrompt),
     'Neon Circuit 진행도를 초기화하시겠습니까?');
-  await page.evaluate(() => { window.confirm = () => true; });
+  const resetFailureBefore = await page.evaluate(() => {
+    window.confirm = () => true;
+    window.__scenarioSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = () => { throw new Error('storage full'); };
+    return {
+      progress: JSON.stringify(scenarioProgress),
+      stored: localStorage.getItem('neonDropScenario'),
+      selected: selectedScenarioStageId,
+      map: document.querySelector('#scenario-map-screen').style.display,
+    };
+  });
+  let resetFailure;
+  try {
+    await page.locator('#scenario-reset-btn').click();
+    resetFailure = await page.evaluate(() => {
+      const error = document.querySelector('#scenario-reset-error');
+      return {
+        progress: JSON.stringify(scenarioProgress),
+        stored: localStorage.getItem('neonDropScenario'),
+        selected: selectedScenarioStageId,
+        map: document.querySelector('#scenario-map-screen').style.display,
+        error: error?.textContent ?? null,
+        ariaLive: error?.getAttribute('aria-live') ?? null,
+      };
+    });
+  } finally {
+    await page.evaluate(() => {
+      Storage.prototype.setItem = window.__scenarioSetItem;
+      delete window.__scenarioSetItem;
+    });
+  }
+  assert.deepEqual(resetFailure, {
+    ...resetFailureBefore,
+    error: 'New Campaign could not be saved. Check browser storage and try again.',
+    ariaLive: 'polite',
+  }, 'a failed New Campaign save must preserve memory, storage, selection, and the current map');
+
   await page.locator('#scenario-reset-btn').click();
   const reset = await page.evaluate(() => ({
     progress: scenarioProgress,
@@ -873,7 +909,7 @@ async function testScenarioRewards(browser, url) {
     version: 1,
     unlockedStage: 2,
     results: {'1': {stars: 3, bestTimeMs: 70000}},
-    upgrades: {pulse: 1, cryo: 0, firewall: 0},
+    upgrades: {pulse: 0, cryo: 0, firewall: 0},
     pendingRewardStage: 1,
     completed: false,
   })));
@@ -906,7 +942,7 @@ async function testScenarioRewards(browser, url) {
       version: 1,
       unlockedStage: 2,
       results: {'1': {stars: 3, bestTimeMs: 70000}},
-      upgrades: {pulse: 1, cryo: 1, firewall: 0},
+      upgrades: {pulse: 0, cryo: 1, firewall: 0},
       pendingRewardStage: null,
       completed: false,
     },

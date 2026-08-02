@@ -70,6 +70,7 @@ const scenarioStageBest = document.getElementById('scenario-stage-best');
 const scenarioPlayBtn = document.getElementById('scenario-play-btn');
 const scenarioMapBackBtn = document.getElementById('scenario-map-back-btn');
 const scenarioResetBtn = document.getElementById('scenario-reset-btn');
+const scenarioResetError = document.getElementById('scenario-reset-error');
 const scenarioBriefingScreen = document.getElementById('scenario-briefing-screen');
 const scenarioBriefingRival = document.getElementById('scenario-briefing-rival');
 const scenarioBriefingName = document.getElementById('scenario-briefing-name');
@@ -1103,8 +1104,13 @@ scenarioResultMapBtn.addEventListener('click', leaveScenarioForMap);
 scenarioRewardOpenBtn.addEventListener('click', showScenarioReward);
 scenarioResetBtn.addEventListener('click', () => {
     if (!window.confirm('Neon Circuit 진행도를 초기화하시겠습니까?')) return;
-    scenarioProgress = createScenarioProgress();
-    writeScenarioProgress();
+    const candidate = createScenarioProgress();
+    if (!writeScenarioProgress(candidate)) {
+        scenarioResetError.textContent = 'New Campaign could not be saved. Check browser storage and try again.';
+        return;
+    }
+    scenarioProgress = candidate;
+    scenarioResetError.textContent = '';
     selectedScenarioStageId = 1;
     renderScenarioMap();
     scenarioStageList.querySelector('[data-scenario-stage="1"]')?.focus();

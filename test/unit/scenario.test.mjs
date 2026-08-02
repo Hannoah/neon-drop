@@ -76,7 +76,7 @@ test('normalizeScenarioProgress keeps canonical valid stage result keys only', (
 
 test('normalizeScenarioProgress normalizes upgrade, reward, and completion boundaries', () => {
     for (const [input, expected] of [
-        [{pulse: 4, cryo: 5, firewall: -1, pendingRewardStage: 4, completed: true}, {pulse: 4, cryo: 0, firewall: 0, pendingRewardStage: 4, completed: true}],
+        [{pulse: 4, cryo: 5, firewall: -1, pendingRewardStage: 4, completed: true}, {pulse: 4, cryo: 0, firewall: 0, pendingRewardStage: null, completed: false}],
         [{pulse: 1.5, cryo: 3, firewall: 9, pendingRewardStage: 5, completed: 'true'}, {pulse: 0, cryo: 3, firewall: 0, pendingRewardStage: null, completed: false}],
     ]) {
         const progress = normalizeScenarioProgress({version: 1, unlockedStage: 1, upgrades: input, ...input});
@@ -86,6 +86,48 @@ test('normalizeScenarioProgress normalizes upgrade, reward, and completion bound
             completed: progress.completed,
         }, {upgrades: {pulse: expected.pulse, cryo: expected.cryo, firewall: expected.firewall}, pendingRewardStage: expected.pendingRewardStage, completed: expected.completed});
     }
+});
+
+test('normalizeScenarioProgress rejects contradictory or unspendable completion state', () => {
+    const result = {stars: 3, bestTimeMs: 70000};
+    const progress = input => normalizeScenarioProgress({
+        version: 1,
+        results: {},
+        upgrades: {pulse: 0, cryo: 0, firewall: 0},
+        pendingRewardStage: null,
+        completed: false,
+        ...input,
+    });
+
+    assert.equal(progress({unlockedStage: 1, pendingRewardStage: 1}).pendingRewardStage, null,
+        'a reward requires its stage result and next stage unlock');
+    assert.equal(progress({unlockedStage: 3, results: {1: result}, pendingRewardStage: 2}).pendingRewardStage, null,
+        'a reward requires a matching completed-stage result');
+    assert.equal(progress({unlockedStage: 5, results: {4: result}, completed: true}).completed, false,
+        'champion state requires a stage 5 result');
+
+    const champion = progress({
+        unlockedStage: 5,
+        results: {1: result, 5: result},
+        pendingRewardStage: 1,
+        completed: true,
+    });
+    assert.equal(champion.completed, true);
+    assert.equal(champion.pendingRewardStage, null, 'champion state cannot retain an earlier reward');
+
+    const allMax = progress({
+        unlockedStage: 2,
+        results: {1: result},
+        upgrades: {pulse: 4, cryo: 4, firewall: 4},
+        pendingRewardStage: 1,
+    });
+    assert.equal(allMax.pendingRewardStage, null, 'an impossible all-max reward must not hardlock the campaign');
+
+    assert.equal(progress({
+        unlockedStage: 2,
+        results: {1: result},
+        pendingRewardStage: 1,
+    }).pendingRewardStage, 1, 'a consistent spendable reward must survive normalization');
 });
 
 test('canPlayScenarioStage allows unlocked stages only', () => {
