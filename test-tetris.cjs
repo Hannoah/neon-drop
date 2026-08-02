@@ -723,6 +723,26 @@ async function testScenarioRewards(browser, url) {
     pulse: scenarioProgress.upgrades.pulse,
     pending: scenarioProgress.pendingRewardStage,
   })), {pulse: 1, pending: null});
+  const replayedRewardedStage = await page.evaluate(() => {
+    startScenarioStage(1);
+    elapsedTime = 100000;
+    const completed = completeScenarioStage();
+    return {
+      completed,
+      result: scenarioProgress.results[1],
+      upgrades: scenarioProgress.upgrades,
+      pending: scenarioProgress.pendingRewardStage,
+      rewardVisible: document.querySelector('#scenario-reward-open-btn').style.display !== 'none',
+    };
+  });
+  assert.deepEqual(replayedRewardedStage, {
+    completed: true,
+    result: {stars: 3, bestTimeMs: 70000},
+    upgrades: {pulse: 1, cryo: 0, firewall: 0},
+    pending: null,
+    rewardVisible: false,
+  }, 'replaying a rewarded stage must not create another reward or change upgrades');
+  await page.evaluate(() => showStartScreen());
   await page.locator('#scenario-continue-btn').click();
   assert.equal(await page.locator('[data-scenario-stage="2"]').getAttribute('aria-current'), 'step');
 
@@ -769,8 +789,132 @@ async function testScenarioRewards(browser, url) {
     },
   }, 'pending rewards must be validated, unavoidable, and selectable only once');
 
+  const failedCompletionSave = await page.evaluate(() => {
+    scenarioProgress = createScenarioProgress();
+    writeScenarioProgress();
+    startScenarioStage(1);
+    elapsedTime = 70000;
+    const progress = JSON.stringify(scenarioProgress);
+    const stored = localStorage.getItem('neonDropScenario');
+    const originalSetItem = Storage.prototype.setItem;
+    let completed;
+    try {
+      Storage.prototype.setItem = () => { throw new Error('storage full'); };
+      completed = completeScenarioStage();
+    } finally {
+      Storage.prototype.setItem = originalSetItem;
+    }
+    return {
+      completed,
+      progressUnchanged: JSON.stringify(scenarioProgress) === progress,
+      storedUnchanged: localStorage.getItem('neonDropScenario') === stored,
+      resolved: scenarioResolved,
+      gameOver: isGameOver,
+      title: document.querySelector('#scenario-result-title').textContent,
+      detail: document.querySelector('#scenario-result-detail').textContent,
+      starLabel: document.querySelector('#scenario-result-stars').getAttribute('aria-label'),
+      retryVisible: document.querySelector('#scenario-retry-btn').style.display !== 'none',
+      mapVisible: document.querySelector('#scenario-result-map-btn').style.display !== 'none',
+      rewardVisible: document.querySelector('#scenario-reward-open-btn').style.display !== 'none',
+    };
+  });
+  assert.deepEqual(failedCompletionSave, {
+    completed: false,
+    progressUnchanged: true,
+    storedUnchanged: true,
+    resolved: true,
+    gameOver: true,
+    title: 'SAVE FAILED',
+    detail: 'Progress could not be saved. Check browser storage and retry.',
+    starLabel: '0 of 3 stars',
+    retryVisible: true,
+    mapVisible: false,
+    rewardVisible: false,
+  }, 'a failed completion save must stop safely without publishing candidate progress or success UI');
+
+  const failedRewardSave = await page.evaluate(() => {
+    scenarioProgress = {
+      version: 1, unlockedStage: 2, results: {'1': {stars: 3, bestTimeMs: 70000}},
+      upgrades: {pulse: 1, cryo: 0, firewall: 0}, pendingRewardStage: 1, completed: false,
+    };
+    writeScenarioProgress();
+    showScenarioReward();
+    const progress = JSON.stringify(scenarioProgress);
+    const stored = localStorage.getItem('neonDropScenario');
+    const originalSetItem = Storage.prototype.setItem;
+    let chosen;
+    try {
+      Storage.prototype.setItem = () => { throw new Error('storage full'); };
+      chosen = chooseScenarioUpgrade('cryo');
+    } finally {
+      Storage.prototype.setItem = originalSetItem;
+    }
+    const error = document.querySelector('#scenario-reward-error');
+    return {
+      chosen,
+      progressUnchanged: JSON.stringify(scenarioProgress) === progress,
+      storedUnchanged: localStorage.getItem('neonDropScenario') === stored,
+      pending: scenarioProgress.pendingRewardStage,
+      cryo: scenarioProgress.upgrades.cryo,
+      rewardVisible: document.querySelector('#scenario-reward-screen').style.display !== 'none',
+      error: error?.textContent ?? null,
+      ariaLive: error?.getAttribute('aria-live') ?? null,
+    };
+  });
+  assert.deepEqual(failedRewardSave, {
+    chosen: false,
+    progressUnchanged: true,
+    storedUnchanged: true,
+    pending: 1,
+    cryo: 0,
+    rewardVisible: true,
+    error: 'Progress could not be saved. Try again.',
+    ariaLive: 'polite',
+  }, 'a failed reward save must retain the pending choice and show an accessible retryable error');
+
+  const maxedUpgrade = await page.evaluate(() => {
+    scenarioProgress = {
+      version: 1, unlockedStage: 2, results: {'1': {stars: 3, bestTimeMs: 70000}},
+      upgrades: {pulse: 4, cryo: 0, firewall: 0}, pendingRewardStage: 1, completed: false,
+    };
+    writeScenarioProgress();
+    showScenarioReward();
+    const buttons = [...document.querySelectorAll('#scenario-reward-options button')];
+    const rendered = buttons.map(button => ({
+      id: button.dataset.scenarioUpgrade,
+      disabled: button.disabled,
+      text: button.textContent,
+    }));
+    const pulse = chooseScenarioUpgrade('pulse');
+    const pendingAfterPulse = scenarioProgress.pendingRewardStage;
+    const cryo = chooseScenarioUpgrade('cryo');
+    return {
+      rendered,
+      pulse,
+      pendingAfterPulse,
+      cryo,
+      upgrades: scenarioProgress.upgrades,
+      pending: scenarioProgress.pendingRewardStage,
+    };
+  });
+  assert.deepEqual(maxedUpgrade, {
+    rendered: [
+      {id: 'pulse', disabled: true, text: 'Pulse Amp\n+20% score and +1 AI attack per stack\nMAX'},
+      {id: 'cryo', disabled: false, text: 'Cryo Field\n+10% drop interval per stack, max +30%\nCURRENT 0 / 4'},
+      {id: 'firewall', disabled: false, text: 'Firewall\nBlock one garbage application per stack\nCURRENT 0 / 4'},
+    ],
+    pulse: false,
+    pendingAfterPulse: 1,
+    cryo: true,
+    upgrades: {pulse: 4, cryo: 1, firewall: 0},
+    pending: null,
+  }, 'maxed upgrades must be disabled and must not consume a pending reward');
+
   const merged = await page.evaluate(() => {
-    scenarioProgress.unlockedStage = 5;
+    scenarioProgress = {
+      version: 1, unlockedStage: 5, results: {'1': {stars: 3, bestTimeMs: 70000}},
+      upgrades: {pulse: 1, cryo: 1, firewall: 0}, pendingRewardStage: null, completed: false,
+    };
     startScenarioStage(1);
     elapsedTime = 100000;
     completeScenarioStage();
@@ -785,6 +929,25 @@ async function testScenarioRewards(browser, url) {
     faster: {stars: 3, bestTimeMs: 60000},
     unlocked: 5,
   }, 'replays must merge best stars and time without reducing unlocked progress');
+
+  const stickyCompletion = await page.evaluate(() => {
+    scenarioProgress.completed = true;
+    scenarioProgress.pendingRewardStage = null;
+    writeScenarioProgress();
+    startScenarioStage(1);
+    elapsedTime = 100000;
+    completeScenarioStage();
+    return {
+      completed: scenarioProgress.completed,
+      pending: scenarioProgress.pendingRewardStage,
+      upgrades: scenarioProgress.upgrades,
+    };
+  });
+  assert.deepEqual(stickyCompletion, {
+    completed: true,
+    pending: null,
+    upgrades: {pulse: 1, cryo: 1, firewall: 0},
+  }, 'replaying an earlier stage after becoming champion must keep completion without farming rewards');
 
   const failed = await page.evaluate(() => {
     scenarioProgress.upgrades.firewall = 2;

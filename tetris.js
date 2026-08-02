@@ -86,6 +86,7 @@ const scenarioRewardOpenBtn = document.getElementById('scenario-reward-open-btn'
 const scenarioRetryBtn = document.getElementById('scenario-retry-btn');
 const scenarioResultMapBtn = document.getElementById('scenario-result-map-btn');
 const scenarioRewardScreen = document.getElementById('scenario-reward-screen');
+const scenarioRewardError = document.getElementById('scenario-reward-error');
 const scenarioRewardOptions = document.getElementById('scenario-reward-options');
 const viewLeaderboardBtn = document.getElementById('view-leaderboard-btn');
 const menuExitBtn = document.getElementById('menu-exit-btn');
@@ -245,11 +246,13 @@ function readScenarioProgress() {
     }
 }
 
-function writeScenarioProgress() {
+function writeScenarioProgress(value = scenarioProgress) {
     try {
-        localStorage.setItem(SCENARIO_KEY, JSON.stringify(scenarioProgress));
+        localStorage.setItem(SCENARIO_KEY, JSON.stringify(value));
+        return true;
     } catch {
         // Campaign play remains available when storage is unavailable.
+        return false;
     }
 }
 
@@ -866,14 +869,28 @@ function completeScenarioStage() {
     const stageId = activeScenarioStage.id;
     const stars = starsForScenarioStage(activeScenarioStage, elapsedTime);
     const previous = scenarioProgress.results[stageId];
-    scenarioProgress.results[stageId] = {
-        stars: Math.max(previous?.stars || 0, stars),
-        bestTimeMs: previous ? Math.min(previous.bestTimeMs, elapsedTime) : elapsedTime,
+    const candidate = {
+        ...scenarioProgress,
+        results: {
+            ...scenarioProgress.results,
+            [stageId]: {
+                stars: Math.max(previous?.stars || 0, stars),
+                bestTimeMs: previous ? Math.min(previous.bestTimeMs, elapsedTime) : elapsedTime,
+            },
+        },
+        upgrades: {...scenarioProgress.upgrades},
+        unlockedStage: Math.max(scenarioProgress.unlockedStage, Math.min(5, stageId + 1)),
+        pendingRewardStage: stageId === 5 ? null
+            : previous ? scenarioProgress.pendingRewardStage : stageId,
+        completed: scenarioProgress.completed || stageId === 5,
     };
-    scenarioProgress.unlockedStage = Math.max(scenarioProgress.unlockedStage, Math.min(5, stageId + 1));
-    scenarioProgress.pendingRewardStage = stageId < 5 ? stageId : null;
-    if (stageId === 5) scenarioProgress.completed = true;
-    writeScenarioProgress();
+    if (!writeScenarioProgress(candidate)) {
+        showScenarioResult(false, 0, 'SAVE FAILED');
+        scenarioResultDetail.textContent = 'Progress could not be saved. Check browser storage and retry.';
+        scenarioResultMapBtn.style.display = 'none';
+        return false;
+    }
+    scenarioProgress = candidate;
     showScenarioResult(true, stars);
     return true;
 }
@@ -897,37 +914,49 @@ function showScenarioResult(success, stars = 0, failureTitle = 'SYSTEM OVERLOAD'
     scenarioResultDetail.textContent = success
         ? `${activeScenarioStage.name} · TIME ${formatElapsedTime(elapsedTime)}`
         : 'Retry Stage';
-    scenarioRewardOpenBtn.style.display = success && activeScenarioStage.id < 5 ? '' : 'none';
+    scenarioRewardOpenBtn.style.display = success && scenarioProgress.pendingRewardStage !== null ? '' : 'none';
+    scenarioResultMapBtn.style.display = '';
     scenarioResultScreen.style.display = 'block';
     openModal('scenario-result-title', scenarioRetryBtn);
 }
 
 function showScenarioReward() {
     if (!Number.isInteger(scenarioProgress.pendingRewardStage)) return false;
+    scenarioRewardError.textContent = '';
     const buttons = SCENARIO_UPGRADES.map(upgrade => {
         const stack = scenarioProgress.upgrades[upgrade.id];
         const button = document.createElement('button');
         button.type = 'button';
         button.dataset.scenarioUpgrade = upgrade.id;
         button.dataset.stack = stack;
-        button.textContent = `${upgrade.name}\n${upgrade.description}\nCURRENT ${stack} / 4`;
+        button.disabled = stack >= 4;
+        button.textContent = `${upgrade.name}\n${upgrade.description}\n${button.disabled ? 'MAX' : `CURRENT ${stack} / 4`}`;
         button.addEventListener('click', () => chooseScenarioUpgrade(upgrade.id));
         return button;
     });
     scenarioRewardOptions.replaceChildren(...buttons);
     hideModalScreens();
     scenarioRewardScreen.style.display = 'block';
-    openModal('scenario-reward-title', buttons[0]);
+    openModal('scenario-reward-title', buttons.find(button => !button.disabled) || buttons[0]);
     return true;
 }
 
 function chooseScenarioUpgrade(id) {
     if (!Number.isInteger(scenarioProgress.pendingRewardStage)
         || scenarioProgress.pendingRewardStage < 1 || scenarioProgress.pendingRewardStage > 4
-        || !SCENARIO_UPGRADES.some(upgrade => upgrade.id === id)) return false;
-    scenarioProgress.upgrades[id] = Math.min(4, scenarioProgress.upgrades[id] + 1);
-    scenarioProgress.pendingRewardStage = null;
-    writeScenarioProgress();
+        || !SCENARIO_UPGRADES.some(upgrade => upgrade.id === id)
+        || scenarioProgress.upgrades[id] >= 4) return false;
+    const candidate = {
+        ...scenarioProgress,
+        results: {...scenarioProgress.results},
+        upgrades: {...scenarioProgress.upgrades, [id]: scenarioProgress.upgrades[id] + 1},
+        pendingRewardStage: null,
+    };
+    if (!writeScenarioProgress(candidate)) {
+        scenarioRewardError.textContent = 'Progress could not be saved. Try again.';
+        return false;
+    }
+    scenarioProgress = candidate;
     selectedScenarioStageId = scenarioProgress.unlockedStage;
     showScenarioMap();
     return true;
