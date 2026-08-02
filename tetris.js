@@ -853,18 +853,17 @@ function togglePause() {
 document.addEventListener('keydown', event => {
     if (isEditableTarget(event.target)) return;
 
-    if (audioCtx && audioCtx.state === 'suspended') {
+    if (audioCtx && audioCtx.state === 'suspended' && player.matrix && !isGameOver) {
         audioCtx.resume();
         startBGM();
     }
 
     const key = event.key.toLowerCase();
-    if (!player.matrix && startScreen.style.display !== 'none' && key === 'enter') {
+    if (!player.matrix && startScreen.style.display !== 'none' && key === 'enter' &&
+        event.target.matches('[data-mode-card]')) {
         event.preventDefault();
-        if (event.target.matches('[data-mode-card]')) {
-            selectGameMode(event.target.dataset.mode);
-            writePreferences();
-        }
+        selectGameMode(event.target.dataset.mode);
+        writePreferences();
         startGameBtn.click();
         return;
     }

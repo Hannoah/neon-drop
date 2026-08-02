@@ -76,6 +76,14 @@ async function testInputGuards(browser, url) {
 async function testKeyboardModeStart(browser, url) {
   const { page, pageErrors } = await openPage(browser, url);
 
+  await page.locator('#scenario-continue-btn').focus();
+  await page.keyboard.press('Enter');
+  assert.deepEqual(await page.evaluate(() => ({
+    startVisible: getComputedStyle(startScreen).display !== 'none',
+    playerMatrix: player.matrix,
+  })), { startVisible: true, playerMatrix: null },
+  'Enter on the campaign card must not start quick-play');
+
   await page.locator('[data-mode-card="sprint"]').focus();
   await page.keyboard.press('Enter');
 
@@ -211,19 +219,20 @@ async function testCampaignMenuExit(browser, url) {
   await page.getByRole('button', { name: 'Start Game' }).click();
   assert.equal(await page.evaluate(() => isBgmRunning()), true,
     'safe exit must stop a running BGM');
-  await page.evaluate(() => returnToMenu());
   await page.evaluate(() => {
     window.confirm = () => true;
-    window.close = () => {};
+    window.__closeCount = 0;
+    window.close = () => { window.__closeCount++; };
   });
-  await page.locator('#menu-exit-btn').click();
+  await page.evaluate(() => exitApplication());
   await page.locator('#exit-screen').waitFor({ state: 'visible' });
 
   assert.deepEqual(await page.evaluate(() => ({
+    closeCount: window.__closeCount,
     animationFrameId,
     bgmRunning: isBgmRunning(),
     focused: document.activeElement?.id,
-  })), { animationFrameId: null, bgmRunning: false, focused: 'exit-return-btn' },
+  })), { closeCount: 1, animationFrameId: null, bgmRunning: false, focused: 'exit-return-btn' },
   'safe exit must stop gameplay and focus the fallback action');
 
   await page.locator('#exit-return-btn').click();
@@ -232,6 +241,45 @@ async function testCampaignMenuExit(browser, url) {
   assert.equal(await page.evaluate(() => document.activeElement?.id), 'scenario-continue-btn',
     'Return to Menu must restore campaign-card focus');
   assert.equal(pageErrors.length, 0, 'campaign menu exit must not throw');
+  await page.close();
+}
+
+async function testTerminalExitAudio(browser, url) {
+  const { page, pageErrors } = await openPage(browser, url);
+
+  await page.evaluate(() => {
+    window.confirm = () => true;
+    window.close = () => {};
+    exitApplication();
+  });
+  await page.locator('#exit-screen').waitFor({ state: 'visible' });
+  await page.keyboard.press('Tab');
+  assert.equal(await page.evaluate(() => isBgmRunning()), false,
+    'keyboard navigation on the terminal fallback must not restart BGM');
+  assert.equal(pageErrors.length, 0, 'terminal fallback keyboard navigation must not throw');
+  await page.close();
+}
+
+async function testShortLandscapeMenu(browser, url) {
+  const { page, pageErrors } = await openPage(browser, url);
+  await page.setViewportSize({ width: 568, height: 320 });
+  await page.reload();
+
+  const initial = await page.evaluate(() => ({
+    modalTop: startScreen.getBoundingClientRect().top,
+    overlayScrollable: modalOverlay.scrollHeight > modalOverlay.clientHeight,
+  }));
+  assert.ok(initial.modalTop >= 0, 'short landscape must keep the start modal below the viewport top');
+  assert.equal(initial.overlayScrollable, true, 'short landscape must make the modal overlay scrollable');
+
+  await page.locator('#menu-exit-btn').scrollIntoViewIfNeeded();
+  const exitBounds = await page.locator('#menu-exit-btn').evaluate(button => {
+    const rect = button.getBoundingClientRect();
+    return { top: rect.top, bottom: rect.bottom, viewportHeight: innerHeight };
+  });
+  assert.ok(exitBounds.top >= 0 && exitBounds.bottom <= exitBounds.viewportHeight,
+    'short landscape must scroll the menu Exit action fully into view');
+  assert.equal(pageErrors.length, 0, 'short landscape modal layout must not throw');
   await page.close();
 }
 
@@ -847,6 +895,8 @@ async function testUsabilityUI(browser, url) {
     await testInputGuards(browser, url);
     await testKeyboardModeStart(browser, url);
     await testCampaignMenuExit(browser, url);
+    await testTerminalExitAudio(browser, url);
+    await testShortLandscapeMenu(browser, url);
     await testModalAccessibility(browser, url);
     await testPreferencePersistence(browser, url);
     await testAnimationFrameScheduling(browser, url);

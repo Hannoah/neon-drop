@@ -306,6 +306,14 @@
                 transform: none;
             }
         }
+        @media (max-height: 400px) {
+            #modal-overlay {
+                align-items: flex-start;
+                overflow-y: auto;
+                padding: 16px 0;
+                box-sizing: border-box;
+            }
+        }
         @media (max-width: 760px), (orientation: portrait), (pointer: coarse) {
             body {
                 height: auto;
