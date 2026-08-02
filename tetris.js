@@ -27,6 +27,12 @@ import { evaluateOpponentBoard, chooseOpponentMove } from './src/js/ai.js';
 import { createAudioSystem, themeMelody, themeMelodyName } from './src/js/audio.js';
 import { createRenderer } from './src/js/renderer.js';
 import { readLeaderboard, writeLeaderboard, renderLeaderboard } from './src/js/leaderboard.js';
+import {
+    SCENARIO_STAGES,
+    createScenarioProgress,
+    normalizeScenarioProgress,
+    canPlayScenarioStage,
+} from './src/js/scenario.js';
 
 const canvas = document.getElementById('tetris');
 const context = canvas.getContext('2d');
@@ -50,6 +56,24 @@ const nicknameInput = document.getElementById('nickname');
 const saveScoreBtn = document.getElementById('save-score-btn');
 const startGameBtn = document.getElementById('start-game-btn');
 const scenarioContinueBtn = document.getElementById('scenario-continue-btn');
+const scenarioContinueDetail = document.getElementById('scenario-continue-detail');
+const scenarioMapScreen = document.getElementById('scenario-map-screen');
+const scenarioStageList = document.getElementById('scenario-stage-list');
+const scenarioStageRival = document.getElementById('scenario-stage-rival');
+const scenarioStageName = document.getElementById('scenario-stage-name');
+const scenarioStageObjective = document.getElementById('scenario-stage-objective');
+const scenarioStageModifier = document.getElementById('scenario-stage-modifier');
+const scenarioStageBest = document.getElementById('scenario-stage-best');
+const scenarioPlayBtn = document.getElementById('scenario-play-btn');
+const scenarioMapBackBtn = document.getElementById('scenario-map-back-btn');
+const scenarioResetBtn = document.getElementById('scenario-reset-btn');
+const scenarioBriefingScreen = document.getElementById('scenario-briefing-screen');
+const scenarioBriefingRival = document.getElementById('scenario-briefing-rival');
+const scenarioBriefingName = document.getElementById('scenario-briefing-name');
+const scenarioBriefingObjective = document.getElementById('scenario-briefing-objective');
+const scenarioBriefingModifier = document.getElementById('scenario-briefing-modifier');
+const scenarioStageStartBtn = document.getElementById('scenario-stage-start-btn');
+const scenarioBriefingBackBtn = document.getElementById('scenario-briefing-back-btn');
 const viewLeaderboardBtn = document.getElementById('view-leaderboard-btn');
 const menuExitBtn = document.getElementById('menu-exit-btn');
 const exitReturnBtn = document.getElementById('exit-return-btn');
@@ -80,6 +104,7 @@ const sfxToggle = document.getElementById('sfx-toggle');
 const touchControls = document.getElementById('touch-controls');
 const modeCards = [...document.querySelectorAll('[data-mode-card]')];
 const PREFERENCES_KEY = 'neonDropPreferences';
+const SCENARIO_KEY = 'neonDropScenario';
 const touchActions = {
     'touch-left': () => playerMove(-1),
     'touch-rotate': () => playerRotate(1),
@@ -114,6 +139,9 @@ let lastEventMessage = '';
 let eventMessageTimer = 0;
 let playerPendingGarbage = 0;
 let matchEventLog = [];
+let scenarioProgress = readScenarioProgress();
+let selectedScenarioStageId = scenarioProgress.unlockedStage;
+let activeScenarioStage = null;
 
 let isGameOver = false;
 let isPaused = false;
@@ -193,6 +221,22 @@ function writePreferences() {
     }
 }
 
+function readScenarioProgress() {
+    try {
+        return normalizeScenarioProgress(JSON.parse(localStorage.getItem(SCENARIO_KEY)));
+    } catch {
+        return createScenarioProgress();
+    }
+}
+
+function writeScenarioProgress() {
+    try {
+        localStorage.setItem(SCENARIO_KEY, JSON.stringify(scenarioProgress));
+    } catch {
+        // Campaign play remains available when storage is unavailable.
+    }
+}
+
 function restorePreferences() {
     const preferences = readPreferences();
     if (['marathon', 'sprint', 'versus'].includes(preferences.mode)) {
@@ -217,12 +261,119 @@ function closeModal() {
     touchControls.inert = false;
 }
 
+const scenarioCopy = {
+    1: {objective: 'Clear 8 lines.', modifier: 'Standard drop speed.'},
+    2: {objective: 'Clear 15 lines before time expires.', modifier: 'Faster drop speed · 02:30 limit.'},
+    3: {objective: 'Clear 18 lines.', modifier: 'Interference every 30 seconds.'},
+    4: {objective: 'Defeat MIRROR.', modifier: 'One opponent turn per lock.'},
+    5: {objective: 'Defeat OVERLORD.', modifier: 'Two opponent turns per lock · interference every 45 seconds.'},
+};
+
+function hideModalScreens() {
+    startScreen.style.display = 'none';
+    pauseScreen.style.display = 'none';
+    gameOverScreen.style.display = 'none';
+    leaderboardScreen.style.display = 'none';
+    exitScreen.style.display = 'none';
+    scenarioMapScreen.style.display = 'none';
+    scenarioBriefingScreen.style.display = 'none';
+}
+
+function renderScenarioMap() {
+    if (!canPlayScenarioStage(scenarioProgress, selectedScenarioStageId)) {
+        selectedScenarioStageId = scenarioProgress.unlockedStage;
+    }
+
+    const buttons = SCENARIO_STAGES.map(stage => {
+        const button = document.createElement('button');
+        const unlocked = canPlayScenarioStage(scenarioProgress, stage.id);
+        const result = scenarioProgress.results[stage.id];
+        const stars = Math.max(0, Math.min(3, result?.stars || 0));
+        const starsLabel = `${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}`;
+        button.type = 'button';
+        button.dataset.scenarioStage = stage.id;
+        button.disabled = !unlocked;
+        button.textContent = unlocked
+            ? `STAGE ${String(stage.id).padStart(2, '0')}\n${stage.name}\n${stage.rival}\n${starsLabel}`
+            : `STAGE ${String(stage.id).padStart(2, '0')}\nLOCKED`;
+        button.setAttribute('aria-label', unlocked
+            ? `Stage ${String(stage.id).padStart(2, '0')}, ${stage.name}, rival ${stage.rival}, ${stars} of 3 stars`
+            : `Stage ${String(stage.id).padStart(2, '0')}, ${stage.name}, locked`);
+        if (stage.id === selectedScenarioStageId) button.setAttribute('aria-current', 'step');
+        button.addEventListener('click', () => {
+            if (!canPlayScenarioStage(scenarioProgress, stage.id)) return;
+            selectedScenarioStageId = stage.id;
+            renderScenarioMap();
+            scenarioStageList.querySelector(`[data-scenario-stage="${stage.id}"]`)?.focus();
+        });
+        return button;
+    });
+    scenarioStageList.replaceChildren(...buttons);
+
+    const stage = SCENARIO_STAGES.find(candidate => candidate.id === selectedScenarioStageId);
+    const copy = scenarioCopy[stage.id];
+    const result = scenarioProgress.results[stage.id];
+    scenarioStageRival.textContent = `RIVAL · ${stage.rival}`;
+    scenarioStageName.textContent = `STAGE ${String(stage.id).padStart(2, '0')} · ${stage.name}`;
+    scenarioStageObjective.textContent = copy.objective;
+    scenarioStageModifier.textContent = copy.modifier;
+    scenarioStageBest.textContent = `BEST ${result ? formatElapsedTime(result.bestTimeMs) : '--:--'}`;
+    scenarioPlayBtn.disabled = !canPlayScenarioStage(scenarioProgress, stage.id);
+}
+
+function showScenarioMap() {
+    renderScenarioMap();
+    hideModalScreens();
+    scenarioMapScreen.style.display = 'block';
+    const selectedButton = scenarioStageList.querySelector(`[data-scenario-stage="${selectedScenarioStageId}"]`);
+    openModal('scenario-map-title', selectedButton);
+}
+
+function showScenarioBriefing() {
+    if (!canPlayScenarioStage(scenarioProgress, selectedScenarioStageId)) return false;
+    const stage = SCENARIO_STAGES.find(candidate => candidate.id === selectedScenarioStageId);
+    if (!stage) return false;
+    const copy = scenarioCopy[stage.id];
+    scenarioBriefingRival.textContent = stage.rival;
+    scenarioBriefingName.textContent = stage.name;
+    scenarioBriefingObjective.textContent = copy.objective;
+    scenarioBriefingModifier.textContent = copy.modifier;
+    hideModalScreens();
+    scenarioBriefingScreen.style.display = 'block';
+    openModal('scenario-briefing-title', scenarioStageStartBtn);
+    return true;
+}
+
+function startScenarioStage(stageId) {
+    const stage = SCENARIO_STAGES.find(candidate => candidate.id === stageId);
+    if (!stage || !canPlayScenarioStage(scenarioProgress, stageId)) return false;
+
+    cancelScheduledUpdate();
+    if (audioCtx) void audioCtx.resume().catch(() => {});
+    startBGM();
+    activeScenarioStage = stage;
+    gameMode = 'scenario';
+    isGameOver = false;
+    isPaused = false;
+    opponentPanel.style.display = stage.kind === 'opponent' ? 'block' : 'none';
+    gameContainer.classList.toggle('versus-active', stage.kind === 'opponent');
+    closeModal();
+    hideModalScreens();
+    touchControls.hidden = false;
+    resetGameState();
+    playerReset();
+    lastTime = performance.now();
+    scheduleUpdate();
+    return true;
+}
+
 function returnToMenu() {
     cancelScheduledUpdate();
     stopBGM();
     isPaused = false;
     isGameOver = true;
     resetGameState();
+    activeScenarioStage = null;
     showStartScreen();
 }
 
@@ -573,7 +724,7 @@ function updateScore() {
     linesElement.innerText = 'Lines: ' + player.lines;
     const modeLabel = gameMode === 'sprint'
         ? 'Sprint'
-        : (gameMode === 'versus' ? '2P · Versus AI' : 'Marathon');
+        : (gameMode === 'versus' ? '2P · Versus AI' : (gameMode === 'scenario' ? 'Neon Circuit' : 'Marathon'));
     modeElement.innerText = 'Mode: ' + modeLabel;
     timerElement.innerText = 'Time: ' + formatElapsedTime(elapsedTime);
     comboElement.innerText = 'Combo: ' + combo;
@@ -591,14 +742,19 @@ function updateLeaderboard() {
 }
 
 function showStartScreen() {
+    if (activeScenarioStage) {
+        resetGameState();
+        activeScenarioStage = null;
+    }
     opponentPanel.style.display = 'none';
     touchControls.hidden = true;
     gameContainer.classList.remove('versus-active');
-    pauseScreen.style.display = 'none';
-    gameOverScreen.style.display = 'none';
-    leaderboardScreen.style.display = 'none';
-    exitScreen.style.display = 'none';
+    hideModalScreens();
     startScreen.style.display = 'block';
+    const unlockedStage = SCENARIO_STAGES[scenarioProgress.unlockedStage - 1];
+    scenarioContinueDetail.textContent = scenarioProgress.completed
+        ? 'CHAMPION · 5/5 STAGES'
+        : `STAGE ${String(unlockedStage.id).padStart(2, '0')} · ${unlockedStage.rival}`;
     openModal('start-screen-title', scenarioContinueBtn);
 }
 
@@ -688,6 +844,20 @@ startGameBtn.addEventListener('click', () => {
     playerReset();
     lastTime = performance.now();
     scheduleUpdate();
+});
+
+scenarioContinueBtn.addEventListener('click', showScenarioMap);
+scenarioPlayBtn.addEventListener('click', showScenarioBriefing);
+scenarioMapBackBtn.addEventListener('click', showStartScreen);
+scenarioBriefingBackBtn.addEventListener('click', showScenarioMap);
+scenarioStageStartBtn.addEventListener('click', () => startScenarioStage(selectedScenarioStageId));
+scenarioResetBtn.addEventListener('click', () => {
+    if (!window.confirm('Neon Circuit 진행도를 초기화하시겠습니까?')) return;
+    scenarioProgress = createScenarioProgress();
+    writeScenarioProgress();
+    selectedScenarioStageId = 1;
+    renderScenarioMap();
+    scenarioStageList.querySelector('[data-scenario-stage="1"]')?.focus();
 });
 
 modeCards.forEach(card => {
@@ -915,9 +1085,12 @@ const exposed = {
     queueGarbageForOpponent, queueGarbageForPlayer, runOpponentTurn,
     checkSprintCompletion, showHighScoreModal, showStartScreen, showPauseScreen, exitApplication,
     togglePause, quitGame, returnToMenu, selectGameMode, canAcceptGameInput, update, formatElapsedTime,
+    createScenarioProgress, readScenarioProgress, writeScenarioProgress, renderScenarioMap,
+    showScenarioMap, showScenarioBriefing, startScenarioStage, canPlayScenarioStage,
     themeMelody, themeMelodyName,
     isBgmRunning: isBGMRunning,
     PIECE_TYPES, SPRINT_TARGET_LINES, VERSUS_WIDTH, VERSUS_HEIGHT, MAX_PENDING_GARBAGE,
+    SCENARIO_STAGES,
 };
 //Live-bound scalar state: tests read these via window.<name> and mutate them too.
 const liveState = {
@@ -935,6 +1108,9 @@ const liveState = {
     gameMode: [() => gameMode, (v) => { gameMode = v; }],
     shakeTime: [() => shakeTime, (v) => { shakeTime = v; }],
     animationFrameId: [() => animationFrameId, (v) => { animationFrameId = v; }],
+    scenarioProgress: [() => scenarioProgress, (v) => { scenarioProgress = v; }],
+    selectedScenarioStageId: [() => selectedScenarioStageId, (v) => { selectedScenarioStageId = v; }],
+    activeScenarioStage: [() => activeScenarioStage, (v) => { activeScenarioStage = v; }],
 };
 
 for (const [name, value] of Object.entries(exposed)) {

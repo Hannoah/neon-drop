@@ -264,6 +264,34 @@
         .campaign-card small { color: var(--hud-muted); font-size: 11px; }
         .menu-secondary-actions { display: flex; gap: 8px; justify-content: center; }
         .modal .menu-secondary-actions button { flex: 1; }
+        #scenario-map-screen { width: min(calc(100% - 32px), 620px); }
+        #scenario-stage-list {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 8px;
+            margin: 16px 0;
+        }
+        .modal #scenario-stage-list button {
+            min-height: 92px;
+            padding: 8px;
+            font-size: 12px;
+            white-space: pre-line;
+        }
+        .modal #scenario-stage-list button[aria-current="step"] {
+            box-shadow: inset 0 0 0 3px #fff;
+        }
+        .modal button:disabled { cursor: not-allowed; opacity: 0.45; }
+        #scenario-stage-detail, #scenario-briefing-screen dl {
+            margin: 16px 0;
+            padding: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 8px;
+            text-align: left;
+        }
+        #scenario-stage-detail p, #scenario-briefing-screen dd { margin: 6px 0; }
+        #scenario-briefing-screen dt { color: var(--hud-muted); font-size: 11px; }
+        #scenario-briefing-screen dd { margin-left: 0; }
+        .scenario-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
         .secondary-panel summary {
             color: #d6e7f5;
             cursor: pointer;
@@ -371,6 +399,7 @@
             .mode-options {
                 grid-template-columns: 1fr;
             }
+            #scenario-stage-list { grid-template-columns: 1fr; }
             .modal .mode-card {
                 min-height: 52px;
                 text-align: left;
@@ -765,6 +794,37 @@
             <div class="menu-secondary-actions">
                 <button id="view-leaderboard-btn" type="button" style="background: #3498db;">Leaderboard</button>
                 <button id="menu-exit-btn" class="btn-exit" type="button" aria-label="Exit Game">Exit Game</button>
+            </div>
+        </div>
+
+        <div id="scenario-map-screen" class="modal" style="display: none;">
+            <h2 id="scenario-map-title">NEON CIRCUIT</h2>
+            <div id="scenario-stage-list" aria-label="Campaign route"></div>
+            <section id="scenario-stage-detail" aria-live="polite">
+                <p id="scenario-stage-rival"></p>
+                <h3 id="scenario-stage-name"></h3>
+                <p id="scenario-stage-objective"></p>
+                <p id="scenario-stage-modifier"></p>
+                <p id="scenario-stage-best"></p>
+            </section>
+            <div class="scenario-actions">
+                <button id="scenario-play-btn" type="button">View Briefing</button>
+                <button id="scenario-map-back-btn" type="button">Main Menu</button>
+                <button id="scenario-reset-btn" type="button">New Campaign</button>
+            </div>
+        </div>
+
+        <div id="scenario-briefing-screen" class="modal" style="display: none;">
+            <h2 id="scenario-briefing-title">MISSION BRIEFING</h2>
+            <dl>
+                <dt>RIVAL</dt><dd id="scenario-briefing-rival"></dd>
+                <dt>STAGE</dt><dd id="scenario-briefing-name"></dd>
+                <dt>OBJECTIVE</dt><dd id="scenario-briefing-objective"></dd>
+                <dt>MODIFIER</dt><dd id="scenario-briefing-modifier"></dd>
+            </dl>
+            <div class="scenario-actions">
+                <button id="scenario-stage-start-btn" type="button">Start Stage</button>
+                <button id="scenario-briefing-back-btn" type="button">Back to Map</button>
             </div>
         </div>
 

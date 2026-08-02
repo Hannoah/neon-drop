@@ -79,10 +79,11 @@ async function testKeyboardModeStart(browser, url) {
   await page.locator('#scenario-continue-btn').focus();
   await page.keyboard.press('Enter');
   assert.deepEqual(await page.evaluate(() => ({
-    startVisible: getComputedStyle(startScreen).display !== 'none',
+    mapVisible: getComputedStyle(document.querySelector('#scenario-map-screen')).display !== 'none',
     playerMatrix: player.matrix,
-  })), { startVisible: true, playerMatrix: null },
+  })), { mapVisible: true, playerMatrix: null },
   'Enter on the campaign card must not start quick-play');
+  await page.locator('#scenario-map-back-btn').click();
 
   await page.locator('[data-mode-card="sprint"]').focus();
   await page.keyboard.press('Enter');
@@ -147,6 +148,135 @@ async function testPreferencePersistence(browser, url) {
   assert.equal(await page.locator('#start-screen').isVisible(), true,
     'corrupt preferences must not block the menu');
   assert.equal(pageErrors.length, 0, 'preference storage failures must not throw');
+  await page.close();
+}
+
+async function testScenarioMap(browser, url) {
+  const { page, pageErrors } = await openPage(browser, url);
+  await page.evaluate(() => localStorage.removeItem('neonDropScenario'));
+  await page.reload();
+
+  await page.locator('#scenario-continue-btn').click();
+  const initial = await page.evaluate(() => ({
+    labelledBy: modalOverlay.getAttribute('aria-labelledby'),
+    buttonCount: document.querySelectorAll('[data-scenario-stage]').length,
+    enabled: [...document.querySelectorAll('[data-scenario-stage]')].map(button => !button.disabled),
+    current: document.querySelector('[data-scenario-stage][aria-current="step"]')?.dataset.scenarioStage,
+    focused: document.activeElement?.dataset.scenarioStage,
+  }));
+  assert.deepEqual(initial, {
+    labelledBy: 'scenario-map-title',
+    buttonCount: 5,
+    enabled: [true, false, false, false, false],
+    current: '1',
+    focused: '1',
+  }, 'a new campaign must open an accessible map at stage 1');
+
+  const lockedStart = await page.evaluate(() => {
+    const beforeMode = gameMode;
+    const result = startScenarioStage(2);
+    return { result, beforeMode, afterMode: gameMode, activeScenarioStage };
+  });
+  assert.equal(lockedStart.result, false, 'direct starts must not bypass campaign locks');
+  assert.equal(lockedStart.afterMode, lockedStart.beforeMode, 'a rejected stage must not change game mode');
+  assert.equal(lockedStart.activeScenarioStage, null, 'a rejected stage must not become active');
+
+  await page.evaluate(() => localStorage.setItem('neonDropScenario', JSON.stringify({
+    version: 1,
+    unlockedStage: 3,
+    results: {'1': {stars: 2, bestTimeMs: 90000}},
+    upgrades: {pulse: 1, cryo: 0, firewall: 0},
+    pendingRewardStage: null,
+    completed: false,
+  })));
+  await page.reload();
+  assert.equal(await page.locator('#scenario-continue-detail').innerText(), 'STAGE 03 · GLITCH');
+  await page.locator('#scenario-continue-btn').click();
+  assert.equal(await page.locator('[data-scenario-stage="3"]').isEnabled(), true);
+  assert.equal(await page.locator('[data-scenario-stage="3"]').getAttribute('aria-current'), 'step');
+  assert.equal(await page.locator('[data-scenario-stage="4"]').isDisabled(), true);
+  assert.match(await page.locator('[data-scenario-stage="1"]').innerText(), /★★☆/,
+    'completed stage buttons must render earned stars');
+  await page.locator('[data-scenario-stage="1"]').click();
+  assert.equal(await page.locator('#scenario-stage-best').innerText(), 'BEST 01:30');
+
+  await page.locator('[data-scenario-stage="2"]').click();
+  await page.locator('#scenario-play-btn').click();
+  const briefing = await page.evaluate(() => ({
+    labelledBy: modalOverlay.getAttribute('aria-labelledby'),
+    rival: document.querySelector('#scenario-briefing-rival').textContent,
+    name: document.querySelector('#scenario-briefing-name').textContent,
+    objective: document.querySelector('#scenario-briefing-objective').textContent,
+    modifier: document.querySelector('#scenario-briefing-modifier').textContent,
+  }));
+  assert.deepEqual(briefing, {
+    labelledBy: 'scenario-briefing-title',
+    rival: 'RUSH',
+    name: 'Velocity Gate',
+    objective: 'Clear 15 lines before time expires.',
+    modifier: 'Faster drop speed · 02:30 limit.',
+  });
+  await page.locator('#scenario-briefing-back-btn').click();
+  assert.equal(await page.locator('#scenario-map-screen').isVisible(), true);
+  await page.locator('#scenario-play-btn').click();
+  await page.locator('#scenario-stage-start-btn').click();
+  const started = await page.evaluate(() => ({
+    mode: gameMode,
+    activeStageId: activeScenarioStage?.id,
+    modalClosed: getComputedStyle(modalOverlay).display === 'none',
+    playerReady: Boolean(player.matrix),
+  }));
+  assert.deepEqual(started, {mode: 'scenario', activeStageId: 2, modalClosed: true, playerReady: true});
+  await page.evaluate(() => returnToMenu());
+  assert.equal(await page.evaluate(() => activeScenarioStage), null,
+    'returning to the menu must clear only the active campaign stage');
+
+  await page.evaluate(() => localStorage.setItem('neonDropScenario', '{broken'));
+  await page.reload();
+  await page.locator('#scenario-continue-btn').click();
+  assert.deepEqual(await page.locator('[data-scenario-stage]').evaluateAll(buttons => buttons.map(button => !button.disabled)),
+    [true, false, false, false, false], 'corrupt campaign storage must fall back to a new campaign');
+
+  const preserved = await page.evaluate(() => {
+    const progress = {
+      version: 1, unlockedStage: 3, results: {},
+      upgrades: {pulse: 1, cryo: 0, firewall: 0}, pendingRewardStage: null, completed: false,
+    };
+    localStorage.setItem('neonDropScenario', JSON.stringify(progress));
+    localStorage.setItem('neonDropPreferences', '{"mode":"sprint","bgm":false,"sfx":true}');
+    localStorage.setItem('tetrisLeaderboard', '[{"name":"KEEP","score":77}]');
+    return {
+      preferences: localStorage.getItem('neonDropPreferences'),
+      leaderboard: localStorage.getItem('tetrisLeaderboard'),
+    };
+  });
+  await page.reload();
+  await page.locator('#scenario-continue-btn').click();
+  await page.evaluate(() => {
+    window.__scenarioResetPrompt = '';
+    window.confirm = message => {
+      window.__scenarioResetPrompt = message;
+      return false;
+    };
+  });
+  await page.locator('#scenario-reset-btn').click();
+  assert.equal(await page.evaluate(() => scenarioProgress.unlockedStage), 3,
+    'cancelling New Campaign must keep progress');
+  assert.equal(await page.evaluate(() => window.__scenarioResetPrompt),
+    'Neon Circuit 진행도를 초기화하시겠습니까?');
+  await page.evaluate(() => { window.confirm = () => true; });
+  await page.locator('#scenario-reset-btn').click();
+  const reset = await page.evaluate(() => ({
+    progress: scenarioProgress,
+    selected: selectedScenarioStageId,
+    preferences: localStorage.getItem('neonDropPreferences'),
+    leaderboard: localStorage.getItem('tetrisLeaderboard'),
+  }));
+  assert.deepEqual(reset.progress, await page.evaluate(() => createScenarioProgress()));
+  assert.equal(reset.selected, 1);
+  assert.equal(reset.preferences, preserved.preferences, 'New Campaign must preserve quick-play preferences');
+  assert.equal(reset.leaderboard, preserved.leaderboard, 'New Campaign must preserve the leaderboard');
+  assert.equal(pageErrors.length, 0, 'campaign map and briefing interactions must not throw');
   await page.close();
 }
 
@@ -907,6 +1037,7 @@ async function testUsabilityUI(browser, url) {
     await testShortLandscapeMenu(browser, url);
     await testModalAccessibility(browser, url);
     await testPreferencePersistence(browser, url);
+    await testScenarioMap(browser, url);
     await testAnimationFrameScheduling(browser, url);
     await testExitGame(browser, url);
     await testLayoutSizing(browser, url);
