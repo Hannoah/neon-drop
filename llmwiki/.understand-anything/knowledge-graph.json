@@ -1,0 +1,171 @@
+{
+  "version": "1.0.0",
+  "kind": "knowledge",
+  "project": {
+    "name": "Neon Drop LLMWiki",
+    "languages": [
+      "markdown"
+    ],
+    "frameworks": [
+      "karpathy-wiki"
+    ],
+    "description": "Knowledge graph for Neon Drop LLMWiki",
+    "analyzedAt": "2026-08-01T13:49:07.577771+00:00",
+    "gitCommitHash": "5bb73475548c0cbf89cb986ea06b56d2a005dd5e"
+  },
+  "nodes": [
+    {
+      "id": "article:neon-drop-reliability-2026-08-01",
+      "type": "article",
+      "name": "Neon Drop \ud504\ub85c\uc81d\ud2b8 \ub9ac\ubdf0\uc640 \uc2e0\ub8b0\uc131 \uac1c\uc120",
+      "filePath": "neon-drop-reliability-2026-08-01.md",
+      "summary": "Neon Drop \ucf54\ub4dc\ubca0\uc774\uc2a4\ub97c \uc804\uccb4 \uac80\ud1a0\ud558\uace0 \uc2e4\uc81c \ube0c\ub77c\uc6b0\uc800 \uc7ac\ud604\uc744 \ud1b5\ud574 \ud655\uc778\ud55c \ubb38\uc81c\ub97c \ucd5c\uc18c \ubcc0\uacbd\uc73c\ub85c \uc218\uc815\ud588\ub2e4.",
+      "tags": [
+        "accessibility",
+        "github",
+        "persistence",
+        "reliability",
+        "review",
+        "testing"
+      ],
+      "complexity": "simple",
+      "knowledgeMeta": {
+        "wikilinks": [],
+        "category": "Reliability",
+        "content": "---\ntitle: Neon Drop \ud504\ub85c\uc81d\ud2b8 \ub9ac\ubdf0\uc640 \uc2e0\ub8b0\uc131 \uac1c\uc120\ndate: 2026-08-01\nstatus: implemented\ntags: review, accessibility, persistence, testing, github\n---\n\n# Neon Drop \ud504\ub85c\uc81d\ud2b8 \ub9ac\ubdf0\uc640 \uc2e0\ub8b0\uc131 \uac1c\uc120\n\nNeon Drop \ucf54\ub4dc\ubca0\uc774\uc2a4\ub97c \uc804\uccb4 \uac80\ud1a0\ud558\uace0 \uc2e4\uc81c \ube0c\ub77c\uc6b0\uc800 \uc7ac\ud604\uc744 \ud1b5\ud574 \ud655\uc778\ud55c \ubb38\uc81c\ub97c \ucd5c\uc18c \ubcc0\uacbd\uc73c\ub85c \uc218\uc815\ud588\ub2e4.\n\n## \ub9ac\ubdf0 \uacb0\uacfc\n\n- Git\uc774 \uc124\uacc4 \ubb38\uc11c\ub9cc \ucd94\uc801\ud558\uace0 \uc560\ud50c\ub9ac\ucf00\uc774\uc158 \uc804\uccb4\ub97c \ucd94\uc801\ud558\uc9c0 \uc54a\uace0 \uc788\uc5c8\ub2e4.\n- \ubaa8\ub4dc \uce74\ub4dc\uc5d0 \ud3ec\ucee4\uc2a4\ub97c \ub454 \ucc44 Enter\ub97c \ub204\ub974\uba74 \uc120\ud0dd\ud55c \ubaa8\ub4dc\uac00 \uc544\ub2c8\ub77c Marathon\uc774 \uc2dc\uc791\ub410\ub2e4.\n- \uc2dc\uc791\u00b7\uc77c\uc2dc\uc815\uc9c0\u00b7\uac8c\uc784\uc624\ubc84 \uc624\ubc84\ub808\uc774\uc5d0 dialog \uc758\ubbf8, \ucd08\uae30 \ud3ec\ucee4\uc2a4, \ubc30\uacbd \uc785\ub825 \ucc28\ub2e8\uc774 \uc5c6\uc5c8\ub2e4.\n- \ub113\uc740 \uac00\ub85c\ud615 \ud130\uce58 \uae30\uae30\ub294 \ud130\uce58 \ucee8\ud2b8\ub864 \ud45c\uc2dc \uc870\uac74\uc5d0\uc11c \uc81c\uc678\ub410\ub2e4.\n- \uc120\ud0dd\ud55c \ubaa8\ub4dc\uc640 BGM/SFX \uc124\uc815\uc774 \uc0c8\ub85c\uace0\uce68 \ud6c4 \uc720\uc9c0\ub418\uc9c0 \uc54a\uc558\ub2e4.\n- `PIECE_NAMES`, \ub2e8\uc77c garbage \ud568\uc218, renderer shake API \uc77c\ubd80\uac00 \uc0ac\uc6a9\ub418\uc9c0 \uc54a\uc558\ub2e4.\n\n## \uad6c\ud604\n\n- Enter \uc774\ubca4\ud2b8\uac00 \ud3ec\ucee4\uc2a4\ub41c \ubaa8\ub4dc \uce74\ub4dc\ub97c \uba3c\uc800 \uc120\ud0dd\ud55c \ub4a4 \uac8c\uc784\uc744 \uc2dc\uc791\ud558\ub3c4\ub85d \uc218\uc815\ud588\ub2e4.\n- \uae30\uc874 \uc624\ubc84\ub808\uc774\uc5d0 `role=\"dialog\"`, `aria-modal`, \ub3d9\uc801 `aria-labelledby`\ub97c \uc801\uc6a9\ud588\ub2e4.\n- \uc624\ubc84\ub808\uc774\uac00 \uc5f4\ub9ac\uba74 \uac8c\uc784 \uc601\uc5ed\uc5d0 \ub124\uc774\ud2f0\ube0c `inert`\ub97c \uc801\uc6a9\ud558\uace0 \ud654\uba74\ubcc4 \uae30\ubcf8 \ubc84\ud2bc\uc73c\ub85c \ud3ec\ucee4\uc2a4\ub97c \uc774\ub3d9\ud55c\ub2e4.\n- \ubc18\uc751\ud615 \ubbf8\ub514\uc5b4 \ucffc\ub9ac\uc5d0 `(pointer: coarse)`\ub97c \ucd94\uac00\ud588\ub2e4.\n- `neonDropPreferences` JSON \ud558\ub098\uc5d0 \ubaa8\ub4dc\uc640 BGM/SFX \uc124\uc815\uc744 \uc800\uc7a5\ud55c\ub2e4.\n- \uc800\uc7a5\uc18c \uc811\uadfc\uacfc JSON \ud30c\uc2f1\uc740 \uc2e4\ud328\ud574\ub3c4 \uac8c\uc784\uc744 \ub9c9\uc9c0 \uc54a\ub3c4\ub85d \ucc98\ub9ac\ud588\ub2e4.\n- \uae30\uc874 leaderboard \uc800\uc7a5 \ud0a4\ub294 \ud638\ud658\uc131\uc744 \uc704\ud574 \uc720\uc9c0\ud588\ub2e4.\n- \uc0ac\uc6a9\ub418\uc9c0 \uc54a\ub294 \ucf54\ub4dc \uc57d 22\uc904\uc744 \uc0ad\uc81c\ud588\ub2e4.\n\n## \ud14c\uc2a4\ud2b8\n\n\ud14c\uc2a4\ud2b8\ub97c \uba3c\uc800 \ucd94\uac00\ud574 \ub2e4\uc74c \uc2e4\ud328\ub97c \ud655\uc778\ud55c \ud6c4 \uad6c\ud604\ud588\ub2e4.\n\n- Sprint \uce74\ub4dc Enter\uac00 Marathon\uc744 \uc2dc\uc791\ud558\ub294 \ud68c\uadc0\n- dialog \uc758\ubbf8\uc640 \ucd08\uae30 \ud3ec\ucee4\uc2a4 \ubd80\uc7ac\n- coarse-pointer CSS \ubd80\uc7ac\n- \ubaa8\ub4dc\uc640 \uc0ac\uc6b4\ub4dc \uc124\uc815 \ubcf5\uc6d0 \ubd80\uc7ac\n- \uc190\uc0c1\ub41c \uc124\uc815 JSON \ucc98\ub9ac\n\n\ucd5c\uc885 `npm test` \uacb0\uacfc:\n\n- Node \ud14c\uc2a4\ud2b8: 45\uac1c \ud1b5\uacfc, \uc2e4\ud328 0\uac1c\n- Playwright \ube0c\ub77c\uc6b0\uc800 \ud68c\uadc0 \ud14c\uc2a4\ud2b8: \uc804\uccb4 \ud1b5\uacfc\n- \ube0c\ub77c\uc6b0\uc800 page error: 0\uac1c\n- `git diff --cached --check`: \uc624\ub958 \uc5c6\uc74c\n\n## Git \uc0c1\ud0dc\n\n- \uc124\uacc4 \ubb38\uc11c \ucee4\ubc0b: `5bb7347 docs: design Neon Drop reliability fixes`\n- \uc560\ud50c\ub9ac\ucf00\uc774\uc158, \ud14c\uc2a4\ud2b8, README, \ud328\ud0a4\uc9c0 \ud30c\uc77c\uc740 staging \uc0c1\ud0dc\ub2e4.\n- \uad6c\ud604 \ubcc0\uacbd\uc740 \uc544\uc9c1 \ubcc4\ub3c4 \ucee4\ubc0b\ud558\uc9c0 \uc54a\uc558\ub2e4.\n- \ub8e8\ud2b8\uc758 \ube48 `AGENT.md`\ub294 \uc0ac\uc6a9\uc790 \uc18c\uc720\ub85c \ud310\ub2e8\ud574 untracked \uc0c1\ud0dc\ub85c \ubcf4\uc874\ud588\ub2e4.\n\n## GitHub \uac8c\uc2dc \uc0c1\ud0dc\n\n\uac8c\uc2dc \ub300\uc0c1\uc740 `https://github.com/Hannoah/Neon-Drop.git`\uc774\ub2e4. GitHub CLI \uae30\ubcf8 \uc778\uc99d\uacfc \ub8e8\ud2b8 `.env`\uc758 \ud1a0\ud070\uc744 \uac12 \ub178\ucd9c \uc5c6\uc774 \uac80\uc99d\ud588\uc73c\uba70 \ub458 \ub2e4 `invalid`\ub85c \ud310\uc815\ub410\ub2e4. \uc0c8 \uc778\uc99d\uc774 \uc81c\uacf5\ub418\uae30 \uc804\uae4c\uc9c0 \ucee4\ubc0b\uacfc \uc6d0\uaca9 \ud478\uc2dc\ub294 \ubcf4\ub958\ud55c\ub2e4.\n",
+        "backlinks": []
+      }
+    },
+    {
+      "id": "topic:reliability",
+      "type": "topic",
+      "name": "Reliability",
+      "summary": "Category from index: Reliability (1 articles)",
+      "tags": [
+        "category"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "claim:modal-accessibility-requires-isolation",
+      "type": "claim",
+      "name": "Modal accessibility requires focus and input isolation",
+      "summary": "An overlay is reliably modal only when dialog semantics, an appropriate initial focus target, and background interaction blocking are applied together.",
+      "tags": [
+        "accessibility",
+        "dialog",
+        "focus",
+        "inert"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "claim:preferences-must-fail-open",
+      "type": "claim",
+      "name": "Preference persistence must fail open",
+      "summary": "Mode and audio preferences can share one JSON record, but unavailable storage or malformed JSON must fall back safely instead of preventing the game from starting.",
+      "tags": [
+        "persistence",
+        "json",
+        "error-handling",
+        "reliability"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "entity:neon-drop-regression-suite",
+      "type": "entity",
+      "name": "Neon Drop regression suite",
+      "summary": "Node and Playwright checks cover keyboard mode selection, modal behavior, coarse-pointer controls, preference restoration, malformed JSON, and browser page errors.",
+      "tags": [
+        "testing",
+        "playwright",
+        "regression",
+        "browser"
+      ],
+      "complexity": "simple"
+    }
+  ],
+  "edges": [
+    {
+      "source": "article:neon-drop-reliability-2026-08-01",
+      "target": "topic:reliability",
+      "type": "categorized_under",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "article:neon-drop-reliability-2026-08-01",
+      "target": "claim:modal-accessibility-requires-isolation",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "article:neon-drop-reliability-2026-08-01",
+      "target": "claim:preferences-must-fail-open",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "article:neon-drop-reliability-2026-08-01",
+      "target": "entity:neon-drop-regression-suite",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "claim:modal-accessibility-requires-isolation",
+      "target": "entity:neon-drop-regression-suite",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "claim:preferences-must-fail-open",
+      "target": "entity:neon-drop-regression-suite",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "claim:modal-accessibility-requires-isolation",
+      "target": "topic:reliability",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "claim:preferences-must-fail-open",
+      "target": "topic:reliability",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ],
+  "layers": [
+    {
+      "id": "layer:reliability",
+      "name": "Reliability",
+      "description": "Reliability (5 nodes)",
+      "nodeIds": [
+        "article:neon-drop-reliability-2026-08-01",
+        "topic:reliability",
+        "claim:modal-accessibility-requires-isolation",
+        "claim:preferences-must-fail-open",
+        "entity:neon-drop-regression-suite"
+      ]
+    }
+  ],
+  "tour": [
+    {
+      "order": 1,
+      "title": "Reliability",
+      "description": "Explore the Reliability section (1 articles)",
+      "nodeIds": [
+        "article:neon-drop-reliability-2026-08-01"
+      ]
+    }
+  ]
+}

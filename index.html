@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:,">
+    <title>Neon Drop</title>
+    <style>
+        body {
+            background: radial-gradient(circle, #2c3e50 0%, #000000 100%);
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+            padding: 15px;
+            border-radius: 12px;
+            background: rgba(20, 30, 40, 0.8);
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            transform: none;
+        }
+
+        canvas {
+            border: 4px solid #444;
+            background-color: #000;
+            box-shadow: inset 0 0 20px rgba(0,0,0,1);
+        }
+        #game-container:not(.versus-active) > #tetris {
+            width: auto;
+            height: min(632px, calc(100vh - 64px));
+        }
+        #opponent-panel {
+            width: 240px;
+            align-self: flex-start;
+            text-align: center;
+            color: #8fd3ff;
+        }
+        #opponent-board {
+            display: block;
+            width: 240px;
+            height: 400px;
+            border-color: #3498db;
+            margin: 0 auto 10px;
+        }
+        .opponent-status {
+            color: #aaa;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        #side-panel {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            align-content: start;
+            width: 336px;
+            gap: 8px;
+        }
+        #game-container.versus-active {
+            display: grid;
+            grid-template-columns: repeat(2, 248px);
+            grid-template-areas:
+                "opponent player"
+                "side side";
+            justify-content: center;
+            align-items: start;
+            width: 516px;
+            gap: 12px 20px;
+        }
+        #game-container.versus-active #opponent-panel {
+            grid-area: opponent;
+            width: 248px;
+        }
+        #game-container.versus-active #opponent-panel .panel-label {
+            display: none;
+        }
+        #game-container.versus-active > #tetris {
+            grid-area: player;
+            width: 240px;
+            height: 400px;
+        }
+        #game-container.versus-active #side-panel {
+            grid-area: side;
+            width: 516px;
+        }
+        #game-container:not(.versus-active) #side-panel {
+            max-height: min(632px, calc(100vh - 64px));
+            overflow-y: auto;
+        }
+        .panel-box {
+            background: linear-gradient(145deg, rgba(30, 30, 40, 0.9), rgba(20, 20, 30, 0.9));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 15px;
+            text-align: center;
+            margin-bottom: 0;
+            box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.3);
+        }
+        .btn-exit {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+            width: 100%;
+        }
+        .btn-exit:hover {
+            background: #c0392b;
+        }
+        .panel-label {
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        #next-canvas {
+            background-color: #000;
+            border: none;
+        }
+        #score {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px rgba(255,255,255,0.5);
+            letter-spacing: 2px;
+        }
+        #modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .modal {
+            background: #2c3e50;
+            padding: 30px;
+            border-radius: 15px;
+            border: 2px solid #f1c40f;
+            text-align: center;
+            box-shadow: 0 0 30px rgba(241, 196, 15, 0.3);
+            min-width: 300px;
+            animation: modalAppear 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes modalAppear {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .modal h2 {
+            margin-top: 0;
+            color: #f1c40f;
+        }
+        .modal input {
+            padding: 10px;
+            font-size: 18px;
+            border-radius: 5px;
+            border: none;
+            margin: 20px 0;
+            width: 80%;
+            text-align: center;
+        }
+        .modal select {
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: none;
+            margin: 10px 0 20px;
+            min-width: 180px;
+            text-align: center;
+        }
+        .modal button {
+            background: #f1c40f;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .modal button:hover {
+            background: #d4ac0d;
+        }
+        button, select, summary, input {
+            font: inherit;
+        }
+        button:focus-visible, select:focus-visible, summary:focus-visible, input:focus-visible {
+            outline: 3px solid #8fd3ff;
+            outline-offset: 3px;
+        }
+        .mode-options {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            margin: 12px 0 16px;
+        }
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+        .modal .mode-card {
+            min-height: 74px;
+            padding: 10px 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(10, 18, 28, 0.65);
+            color: #fff;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1.25;
+        }
+        .modal .mode-card span {
+            display: block;
+            margin-top: 5px;
+            color: #b7c4cf;
+            font-size: 11px;
+            font-weight: 400;
+        }
+        .modal .mode-card[aria-pressed="true"] {
+            border-color: #f1c40f;
+            background: rgba(241, 196, 15, 0.16);
+            box-shadow: inset 0 0 0 1px rgba(241, 196, 15, 0.45);
+        }
+        .secondary-panel summary {
+            color: #d6e7f5;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 700;
+            list-style-position: inside;
+        }
+        .secondary-panel summary + * {
+            margin-top: 10px;
+        }
+        #touch-controls {
+            display: none;
+            width: min(100%, 360px);
+            margin: 4px auto 0;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+        }
+        #touch-controls[hidden] {
+            display: none;
+        }
+        #touch-controls button {
+            min-height: 48px;
+            border: 1px solid rgba(143, 211, 255, 0.5);
+            border-radius: 10px;
+            background: #213d55;
+            color: #fff;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: 700;
+        }
+        #touch-controls #touch-drop {
+            background: #f1c40f;
+            color: #161616;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .modal { animation: none; }
+        }
+        @media (max-height: 800px) {
+            #game-container {
+                transform: none;
+            }
+        }
+        @media (max-width: 760px), (orientation: portrait), (pointer: coarse) {
+            body {
+                height: auto;
+                min-height: 100vh;
+                justify-content: flex-start;
+                overflow-y: auto;
+                padding: 16px 0;
+                box-sizing: border-box;
+            }
+            #game-container {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr);
+                width: min(calc(100% - 24px), 420px);
+                padding: 12px;
+                gap: 12px;
+                box-sizing: border-box;
+            }
+            #game-container:not(.versus-active) > #tetris {
+                width: min(100%, 240px);
+                height: auto;
+                justify-self: center;
+            }
+            #side-panel {
+                width: 100%;
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 8px;
+            }
+            #side-panel .panel-box {
+                padding: 12px;
+                margin-bottom: 0;
+            }
+            #game-container.versus-active {
+                width: min(calc(100% - 24px), 520px);
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            #game-container.versus-active #side-panel {
+                width: 100%;
+            }
+            #game-container.versus-active > #tetris,
+            #game-container.versus-active #opponent-panel,
+            #game-container.versus-active #opponent-board {
+                width: 100%;
+                height: auto;
+            }
+            #touch-controls:not([hidden]) {
+                display: grid;
+            }
+            .modal {
+                min-width: 0;
+                width: min(calc(100% - 32px), 420px);
+                padding: 22px;
+                box-sizing: border-box;
+            }
+            .mode-options {
+                grid-template-columns: 1fr;
+            }
+            .modal .mode-card {
+                min-height: 52px;
+                text-align: left;
+            }
+            .modal .mode-card span {
+                display: inline;
+                margin-left: 6px;
+            }
+        }
+    </style>
+    <style id="arena-hud-styles">
+        :root {
+            --hud-bg: #060b12;
+            --hud-surface: #0d1724;
+            --hud-panel: #111d2d;
+            --hud-border: #263b52;
+            --hud-muted: #8298b2;
+            --player: #24d8ff;
+            --rival: #ff4f91;
+            --danger: #f2d14f;
+        }
+        body {
+            background:
+                radial-gradient(circle at 50% 20%, rgba(23, 62, 91, 0.35), transparent 42%),
+                linear-gradient(145deg, #03060a, #09111b 58%, #03060a);
+        }
+        #game-container,
+        #game-container.versus-active {
+            display: grid;
+            grid-template-columns: 248px 112px 248px 224px;
+            grid-template-rows: 48px 428px 62px;
+            grid-template-areas:
+                "header header header header"
+                "opponent versus player rail"
+                "footer footer footer footer";
+            align-items: stretch;
+            justify-content: center;
+            gap: 10px 12px;
+            width: 902px;
+            max-height: calc(100vh - 24px);
+            padding: 12px;
+            box-sizing: content-box;
+            border: 1px solid rgba(71, 105, 137, 0.5);
+            border-radius: 16px;
+            background: rgba(6, 11, 18, 0.94);
+            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55), inset 0 0 60px rgba(24, 72, 108, 0.08);
+        }
+        #game-container:not(.versus-active) {
+            grid-template-columns: 100px 248px 224px;
+            grid-template-areas:
+                "header header header"
+                ". player rail"
+                "footer footer footer";
+            width: 596px;
+        }
+        #arena-header {
+            grid-area: header;
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            min-width: 0;
+            padding: 0 12px;
+            border: 1px solid var(--hud-border);
+            border-radius: 9px;
+            background: linear-gradient(90deg, rgba(17, 29, 45, 0.96), rgba(9, 17, 28, 0.96));
+        }
+        .brand-lockup {
+            display: flex;
+            flex-direction: column;
+            min-width: 112px;
+            line-height: 1;
+        }
+        .brand-lockup strong {
+            color: #f6fbff;
+            font-size: 15px;
+            letter-spacing: 0.15em;
+        }
+        .brand-lockup span {
+            margin-top: 4px;
+            color: var(--hud-muted);
+            font-size: 8px;
+            letter-spacing: 0.22em;
+        }
+        .match-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+            margin-right: auto;
+            color: var(--hud-muted);
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        #mode, #timer { color: #c9d9e8 !important; font-size: 11px !important; }
+        .header-actions { display: flex; align-items: center; gap: 6px; }
+        .header-menu { position: relative; }
+        .header-menu summary,
+        #exit-game-btn {
+            display: block;
+            width: auto;
+            padding: 7px 9px;
+            border: 1px solid var(--hud-border);
+            border-radius: 6px;
+            background: #101b2a;
+            color: #bfd1e2;
+            font-size: 10px;
+            font-weight: 700;
+            line-height: 1;
+            list-style: none;
+            white-space: nowrap;
+        }
+        .header-menu summary::-webkit-details-marker { display: none; }
+        .header-menu[open] summary { color: #fff; border-color: var(--player); }
+        .header-menu > :not(summary) {
+            position: absolute;
+            top: 35px;
+            right: 0;
+            z-index: 20;
+            width: 220px;
+            padding: 12px;
+            border: 1px solid var(--hud-border);
+            border-radius: 8px;
+            background: #0c1521;
+            box-shadow: 0 16px 38px rgba(0, 0, 0, 0.55);
+            color: #c3d2e1;
+        }
+        #exit-game-btn { border-color: rgba(255, 79, 145, 0.5); color: #ff91b8; cursor: pointer; }
+        #opponent-panel,
+        #player-panel {
+            width: 248px;
+            align-self: stretch;
+            text-align: center;
+        }
+        #opponent-panel { grid-area: opponent; color: var(--rival); }
+        #player-panel { grid-area: player; color: var(--player); }
+        #game-container:not(.versus-active) #opponent-panel,
+        #game-container:not(.versus-active) #versus-status { display: none !important; }
+        .board-label {
+            height: 22px;
+            color: currentColor;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.18em;
+            line-height: 18px;
+        }
+        #tetris,
+        #opponent-board,
+        #game-container.versus-active > #tetris {
+            display: block;
+            width: 240px;
+            height: 400px;
+            margin: 0 auto;
+            border: 2px solid currentColor;
+            border-radius: 3px;
+            background: #020509;
+        }
+        #tetris { box-shadow: 0 0 18px rgba(36, 216, 255, 0.28), inset 0 0 18px #000; }
+        #opponent-board { box-shadow: 0 0 18px rgba(255, 79, 145, 0.22), inset 0 0 18px #000; }
+        #versus-status {
+            grid-area: versus;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            padding: 14px 10px;
+            border: 1px solid var(--hud-border);
+            border-radius: 10px;
+            background: linear-gradient(180deg, rgba(17, 29, 45, 0.92), rgba(8, 15, 24, 0.92));
+            text-align: center;
+        }
+        .versus-mark { color: #f7fbff; font-size: 24px; letter-spacing: 0.1em; }
+        .versus-divider { width: 34px; height: 1px; background: var(--hud-border); }
+        .pressure-label { color: var(--hud-muted); font-size: 8px; letter-spacing: 0.08em; }
+        #opponent-lines { color: #d3deea; font-size: 10px; }
+        #opponent-garbage, #player-garbage { font-size: 9px; font-weight: 700; white-space: nowrap; }
+        #opponent-garbage { color: var(--rival); }
+        #player-garbage { color: var(--player); }
+        .garbage-meter { width: 76px; height: 6px; overflow: hidden; border-radius: 8px; background: #263447; }
+        .garbage-meter span { display: block; width: 0; height: 100%; background: var(--danger); transition: width 0.2s ease; }
+        #side-panel {
+            grid-area: rail;
+            display: grid;
+            grid-template-columns: 1fr;
+            grid-template-rows: 136px 1fr;
+            width: 224px;
+            height: 428px;
+            gap: 10px;
+            overflow: visible;
+        }
+        #game-container.versus-active #side-panel,
+        #game-container:not(.versus-active) #side-panel {
+            grid-area: rail;
+            width: 224px;
+            max-height: none;
+            overflow: visible;
+        }
+        #side-panel .panel-box {
+            margin: 0;
+            padding: 12px;
+            border: 1px solid var(--hud-border);
+            border-radius: 10px;
+            background: linear-gradient(145deg, rgba(17, 29, 45, 0.96), rgba(10, 18, 29, 0.96));
+            box-shadow: none;
+        }
+        #side-panel .stats-panel { text-align: left; }
+        #score { margin: 5px 0 8px; color: #f6fbff; font-size: 27px !important; letter-spacing: 0.03em; }
+        #level { color: var(--danger) !important; font-size: 12px !important; }
+        .preview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .preview-grid .panel-box { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .panel-label { margin-bottom: 8px; color: var(--hud-muted); font-size: 9px; letter-spacing: 0.14em; }
+        #hold, #next { width: 80px; height: 80px; border: 1px solid #33465c; box-shadow: inset 0 0 16px #000; }
+        #match-footer {
+            grid-area: footer;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .status-chip {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-width: 0;
+            border: 1px solid var(--hud-border);
+            border-radius: 8px;
+            background: #0e1927;
+            color: var(--hud-muted);
+            font-size: 9px;
+            letter-spacing: 0.06em;
+        }
+        .status-chip span { margin-top: 4px; color: #eef7ff; font-size: 12px; font-weight: 800; letter-spacing: 0; }
+        #event-message { color: var(--danger); }
+        #touch-controls { margin-top: 10px; }
+
+        @media (max-width: 760px), (orientation: portrait), (pointer: coarse) {
+            body { height: auto; min-height: 100vh; overflow-y: auto; padding: 12px 0; }
+            #game-container,
+            #game-container.versus-active,
+            #game-container:not(.versus-active) {
+                width: min(calc(100% - 20px), 720px);
+                max-height: none;
+                padding: 10px;
+                box-sizing: border-box;
+                grid-template-rows: auto;
+            }
+            #game-container:not(.versus-active) {
+                grid-template-columns: 1fr;
+                grid-template-areas: "header" "player" "rail" "footer";
+            }
+            #game-container.versus-active {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                grid-template-areas: "header header" "opponent player" "versus versus" "rail rail" "footer footer";
+            }
+            #arena-header { min-height: 54px; flex-wrap: wrap; gap: 7px 10px; padding: 8px 10px; }
+            .brand-lockup { margin-right: auto; }
+            .match-meta { order: 3; width: 100%; }
+            .header-actions { gap: 4px; }
+            .header-menu summary, #exit-game-btn { padding: 6px; font-size: 9px; }
+            #opponent-panel, #player-panel { width: 100%; height: auto; }
+            #tetris, #opponent-board, #game-container.versus-active > #tetris {
+                width: min(100%, 240px);
+                height: auto;
+                aspect-ratio: 3 / 5;
+            }
+            #versus-status { min-height: 82px; flex-direction: row; flex-wrap: wrap; padding: 10px; }
+            #side-panel { width: 100%; height: auto; grid-template-columns: 1fr 2fr; grid-template-rows: auto; }
+            #match-footer { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .status-chip { min-height: 52px; }
+            #touch-controls:not([hidden]) { display: grid; }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <header id="arena-header">
+            <div class="brand-lockup"><strong>NEON DROP</strong><span>ARCADE SYSTEM</span></div>
+            <div class="match-meta">
+                <span id="mode">Mode: Marathon</span>
+                <span id="timer">Time: 00:00</span>
+            </div>
+            <nav class="header-actions" aria-label="Game options">
+                <details class="header-menu">
+                    <summary>Ranks</summary>
+                    <div id="leaderboard" style="font-size: 12px; line-height: 1.7;">Loading...</div>
+                </details>
+                <details class="header-menu">
+                    <summary>Sound</summary>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <label><input type="checkbox" id="bgm-toggle" checked> BGM</label>
+                        <label><input type="checkbox" id="sfx-toggle" checked> SFX</label>
+                    </div>
+                </details>
+                <details id="game-help" class="header-menu">
+                    <summary>Help</summary>
+                    <div style="font-size: 11px; line-height: 1.75;">
+                        ← → Move · ↓ Soft Drop<br>
+                        ↑ Rotate · Space Hard Drop<br>
+                        C Hold · ESC / P Pause<br>
+                        Versus: clear lines to attack
+                    </div>
+                </details>
+                <button class="btn-exit" id="exit-game-btn" aria-label="Exit Game">Exit</button>
+            </nav>
+        </header>
+
+        <div id="opponent-panel" aria-label="AI opponent" style="display: none;">
+            <div class="board-label">AI RIVAL</div>
+            <canvas id="opponent-board" width="240" height="400"></canvas>
+        </div>
+
+        <section id="versus-status" aria-label="Versus status">
+            <strong class="versus-mark">VS</strong>
+            <div class="versus-divider"></div>
+            <div id="opponent-lines">AI LINES 00</div>
+            <div class="pressure-label">RIVAL PRESSURE</div>
+            <div id="opponent-garbage">AI INCOMING 00</div>
+            <div class="garbage-meter" aria-hidden="true"><span id="opponent-garbage-meter"></span></div>
+            <div class="pressure-label">YOUR PRESSURE</div>
+            <div id="player-garbage">YOU INCOMING 00</div>
+            <div class="garbage-meter" aria-hidden="true"><span id="player-garbage-meter"></span></div>
+        </section>
+
+        <div id="player-panel">
+            <div class="board-label">YOU</div>
+            <canvas id="tetris" width="240" height="400"></canvas>
+        </div>
+
+        <aside id="side-panel">
+            <div class="panel-box stats-panel">
+                <div class="panel-label">PLAYER SCORE</div>
+                <div id="score" style="font-weight: bold;">Score: 0</div>
+                <div id="level">Level: 1</div>
+            </div>
+            <div class="preview-grid">
+                <div class="panel-box">
+                    <div class="panel-label">HOLD</div>
+                    <canvas id="hold" width="80" height="80"></canvas>
+                </div>
+                <div class="panel-box">
+                    <div class="panel-label">NEXT</div>
+                    <canvas id="next" width="80" height="80"></canvas>
+                </div>
+            </div>
+        </aside>
+
+        <footer id="match-footer">
+            <div class="status-chip">LINES<span id="lines">0</span></div>
+            <div class="status-chip">COMBO<span id="combo">0</span></div>
+            <div class="status-chip">BACK-TO-BACK<span id="back-to-back">Ready</span></div>
+            <div class="status-chip">EVENT<span id="event-message" aria-live="polite">—</span></div>
+        </footer>
+    </div>
+    <div id="touch-controls" aria-label="Touch controls" hidden>
+        <button id="touch-left" type="button" aria-label="Move left">←</button>
+        <button id="touch-rotate" type="button" aria-label="Rotate piece">↻</button>
+        <button id="touch-right" type="button" aria-label="Move right">→</button>
+        <button id="touch-down" type="button" aria-label="Soft drop">↓</button>
+        <button id="touch-drop" type="button" aria-label="Hard drop">Drop</button>
+        <button id="touch-hold" type="button" aria-label="Hold piece">Hold</button>
+    </div>
+    <div id="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="start-screen-title">
+        <!-- Pause Screen -->
+        <div id="pause-screen" class="modal" style="display: none;">
+            <h2 id="pause-screen-title">PAUSED</h2>
+            <p style="color: #aaa; margin-bottom: 20px;">Take a breath!</p>
+            <button id="resume-game-btn">Resume Game</button>
+            <button id="quit-to-menu-btn" style="background: #e74c3c; margin-left: 10px;">Quit to Menu</button>
+        </div>
+
+        <!-- Start Screen -->
+        <div id="start-screen" class="modal" style="display: block;">
+            <h2 id="start-screen-title">NEON DROP</h2>
+            <p style="color: #c4ced7; margin-bottom: 14px;">Choose a mode and start playing.</p>
+            <label for="game-mode" class="visually-hidden">Game mode</label>
+            <select id="game-mode" class="visually-hidden" aria-label="Game mode">
+                <option value="marathon">Marathon</option>
+                <option value="sprint">Sprint · 40 Lines</option>
+                <option value="versus">2P · Versus AI</option>
+            </select>
+            <div class="mode-options" role="group" aria-label="Choose a game mode">
+                <button type="button" class="mode-card" data-mode-card="marathon" data-mode="marathon" aria-pressed="true">Marathon<span>Level up at your pace</span></button>
+                <button type="button" class="mode-card" data-mode-card="sprint" data-mode="sprint" aria-pressed="false">Sprint<span>Clear 40 lines fast</span></button>
+                <button type="button" class="mode-card" data-mode-card="versus" data-mode="versus" aria-pressed="false">Versus AI<span>Send garbage to your rival</span></button>
+            </div>
+            <button id="start-game-btn">Start Game</button>
+            <button id="view-leaderboard-btn" style="background: #3498db; margin-left: 10px;">Leaderboard</button>
+        </div>
+
+        <!-- High Score / Game Over Screen -->
+        <div id="game-over-screen" class="modal" style="display: none;">
+            <h2 id="game-over-title">Game Over!</h2>
+            <p>Your Score: <span id="final-score">0</span></p>
+            <div id="high-score-input-group">
+                <input type="text" id="nickname" placeholder="Enter Nickname" maxlength="10">
+                <br>
+                <button id="save-score-btn">Save Score</button>
+            </div>
+            <div id="game-over-footer" style="margin-top: 20px;">
+                <button id="game-over-menu-btn" type="button" style="background: #95a5a6;">Main Menu</button>
+            </div>
+        </div>
+
+        <!-- Leaderboard Screen -->
+        <div id="leaderboard-screen" class="modal" style="display: none;">
+            <h2 id="leaderboard-screen-title">Top 5 Legends</h2>
+            <div id="leaderboard-list" style="text-align: left; margin: 20px 0; line-height: 2; font-size: 18px;">
+                <!-- Scores go here -->
+            </div>
+            <button id="close-leaderboard-btn">Close</button>
+        </div>
+    </div>
+    <script type="module" src="tetris.js"></script>
+</body>
+</html>
