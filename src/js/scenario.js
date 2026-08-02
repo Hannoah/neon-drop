@@ -1,16 +1,23 @@
-export const SCENARIO_STAGES = Object.freeze([
+const scenarioStages = [
     {id: 1, name: 'Boot Sequence', rival: 'BYTE', kind: 'lines', lineGoal: 8, dropStepMs: 100, timeLimitMs: null, hazardIntervalMs: null, opponentTurns: 0, starTimesMs: [120000, 75000]},
     {id: 2, name: 'Velocity Gate', rival: 'RUSH', kind: 'lines', lineGoal: 15, dropStepMs: 160, timeLimitMs: 150000, hazardIntervalMs: null, opponentTurns: 0, starTimesMs: [120000, 90000]},
     {id: 3, name: 'Interference Zone', rival: 'GLITCH', kind: 'lines', lineGoal: 18, dropStepMs: 120, timeLimitMs: null, hazardIntervalMs: 30000, opponentTurns: 0, starTimesMs: [180000, 120000]},
     {id: 4, name: 'Mirror Match', rival: 'MIRROR', kind: 'opponent', lineGoal: null, dropStepMs: 100, timeLimitMs: null, hazardIntervalMs: null, opponentTurns: 1, starTimesMs: [240000, 150000]},
     {id: 5, name: 'Crown Protocol', rival: 'OVERLORD', kind: 'opponent', lineGoal: null, dropStepMs: 100, timeLimitMs: null, hazardIntervalMs: 45000, opponentTurns: 2, starTimesMs: [300000, 210000]},
-]);
+];
 
-export const SCENARIO_UPGRADES = Object.freeze([
+export const SCENARIO_STAGES = Object.freeze(scenarioStages.map(stage => Object.freeze({
+    ...stage,
+    starTimesMs: Object.freeze(stage.starTimesMs),
+})));
+
+const scenarioUpgrades = [
     {id: 'pulse', name: 'Pulse Amp', description: '+20% score and +1 AI attack per stack'},
     {id: 'cryo', name: 'Cryo Field', description: '+10% drop interval per stack, max +30%'},
     {id: 'firewall', name: 'Firewall', description: 'Block one garbage application per stack'},
-]);
+];
+
+export const SCENARIO_UPGRADES = Object.freeze(scenarioUpgrades.map(upgrade => Object.freeze(upgrade)));
 
 export function createScenarioProgress() {
     return {
@@ -44,7 +51,7 @@ export function normalizeScenarioProgress(value) {
     if (value.results && typeof value.results === 'object' && !Array.isArray(value.results)) {
         progress.results = Object.fromEntries(Object.entries(value.results).flatMap(([stage, result]) => {
             const stageId = Number(stage);
-            return Number.isInteger(stageId) && stageId >= 1 && stageId <= 5 && validResult(result)
+            return Number.isInteger(stageId) && stage === String(stageId) && stageId >= 1 && stageId <= 5 && validResult(result)
                 ? [[stage, {stars: result.stars, bestTimeMs: result.bestTimeMs}]] : [];
         }));
     }
@@ -66,7 +73,7 @@ export function canPlayScenarioStage(progress, stageId) {
 }
 
 export function starsForScenarioStage(stage, elapsedMs) {
-    if (!stage || !Number.isFinite(elapsedMs)) return 0;
+    if (!stage || !Number.isFinite(elapsedMs) || elapsedMs < 0) return 0;
     const [twoStarTime, threeStarTime] = stage.starTimesMs;
     return elapsedMs <= threeStarTime ? 3 : elapsedMs <= twoStarTime ? 2 : 1;
 }
