@@ -571,18 +571,234 @@ async function testScenarioLineStages(browser, url) {
   await page.locator('#scenario-result-map-btn').click();
   assert.deepEqual(await page.evaluate(() => ({
     mapVisible: document.querySelector('#scenario-map-screen').style.display !== 'none',
+    rewardVisible: document.querySelector('#scenario-reward-screen').style.display !== 'none',
     selected: selectedScenarioStageId,
     active: activeScenarioStage,
     progress: JSON.stringify(scenarioProgress),
   })), {
-    mapVisible: true, selected: 3, active: null, progress: overload.progress,
-  }, 'Campaign Map must keep the failed stage selected without changing progress');
+    mapVisible: false, rewardVisible: true, selected: 3, active: null, progress: overload.progress,
+  }, 'Campaign Map must route an earlier pending reward without changing progress');
+
+  await page.locator('#scenario-reward-options button').first().click();
+  await page.evaluate(() => {
+    scenarioProgress.upgrades.pulse = 0;
+    writeScenarioProgress();
+  });
 
   await page.locator('#scenario-map-back-btn').click();
   await page.getByRole('button', {name: 'Start Game'}).click();
   assert.equal(await page.locator('#scenario-objective').isHidden(), true,
     'quick play must hide the campaign objective');
   assert.equal(pageErrors.length, 0, 'campaign line stages must not throw page errors');
+  await page.close();
+}
+
+async function testScenarioRewards(browser, url) {
+  const { page, pageErrors } = await openPage(browser, url);
+  await page.evaluate(() => localStorage.removeItem('neonDropScenario'));
+  await page.reload();
+
+  const firstWin = await page.evaluate(() => {
+    startScenarioStage(1);
+    elapsedTime = 70000;
+    const completed = completeScenarioStage();
+    return {
+      completed,
+      progress: scenarioProgress,
+      stored: JSON.parse(localStorage.getItem('neonDropScenario')),
+    };
+  });
+  const expectedFirstProgress = {
+    version: 1,
+    unlockedStage: 2,
+    results: {'1': {stars: 3, bestTimeMs: 70000}},
+    upgrades: {pulse: 0, cryo: 0, firewall: 0},
+    pendingRewardStage: 1,
+    completed: false,
+  };
+  assert.equal(firstWin.completed, true);
+  assert.deepEqual(firstWin.progress, expectedFirstProgress);
+  assert.deepEqual(firstWin.stored, expectedFirstProgress,
+    'successful progress must be persisted before result UI assertions');
+  assert.deepEqual(await page.evaluate(() => ({
+    visible: document.querySelector('#scenario-result-screen').style.display !== 'none',
+    title: document.querySelector('#scenario-result-title').textContent,
+    stars: document.querySelector('#scenario-result-stars').textContent,
+    starLabel: document.querySelector('#scenario-result-stars').getAttribute('aria-label'),
+    detail: document.querySelector('#scenario-result-detail').textContent,
+    rewardVisible: document.querySelector('#scenario-reward-open-btn').style.display !== 'none',
+  })), {
+    visible: true,
+    title: 'STAGE CLEAR',
+    stars: '★★★',
+    starLabel: '3 of 3 stars',
+    detail: 'Boot Sequence · TIME 01:10',
+    rewardVisible: true,
+  });
+
+  const duplicate = await page.evaluate(() => {
+    const stored = localStorage.getItem('neonDropScenario');
+    document.querySelector('#scenario-result-detail').textContent = 'SENTINEL';
+    return {
+      completed: completeScenarioStage(),
+      storedUnchanged: localStorage.getItem('neonDropScenario') === stored,
+      detail: document.querySelector('#scenario-result-detail').textContent,
+    };
+  });
+  assert.deepEqual(duplicate, {completed: false, storedUnchanged: true, detail: 'SENTINEL'},
+    'duplicate completion must not persist or rewrite the result');
+
+  await page.locator('#scenario-reward-open-btn').click();
+  assert.deepEqual(await page.locator('#scenario-reward-options button').evaluateAll(buttons => buttons.map(button => ({
+    text: button.textContent,
+    stack: button.dataset.stack,
+  }))), [
+    {text: 'Pulse Amp\n+20% score and +1 AI attack per stack\nCURRENT 0 / 4', stack: '0'},
+    {text: 'Cryo Field\n+10% drop interval per stack, max +30%\nCURRENT 0 / 4', stack: '0'},
+    {text: 'Firewall\nBlock one garbage application per stack\nCURRENT 0 / 4', stack: '0'},
+  ], 'a pending reward must render exactly the three native upgrade buttons and stacks');
+  await page.locator('#scenario-reward-options button').first().click();
+  assert.deepEqual(await page.evaluate(() => ({
+    pulse: scenarioProgress.upgrades.pulse,
+    pending: scenarioProgress.pendingRewardStage,
+    unlocked: scenarioProgress.unlockedStage,
+    selected: selectedScenarioStageId,
+    stored: JSON.parse(localStorage.getItem('neonDropScenario')),
+  })), {
+    pulse: 1,
+    pending: null,
+    unlocked: 2,
+    selected: 2,
+    stored: {...expectedFirstProgress, upgrades: {pulse: 1, cryo: 0, firewall: 0}, pendingRewardStage: null},
+  });
+  await page.reload();
+  assert.deepEqual(await page.evaluate(() => ({
+    pulse: scenarioProgress.upgrades.pulse,
+    pending: scenarioProgress.pendingRewardStage,
+  })), {pulse: 1, pending: null});
+  await page.locator('#scenario-continue-btn').click();
+  assert.equal(await page.locator('[data-scenario-stage="2"]').getAttribute('aria-current'), 'step');
+
+  await page.evaluate(() => localStorage.setItem('neonDropScenario', JSON.stringify({
+    version: 1,
+    unlockedStage: 2,
+    results: {'1': {stars: 3, bestTimeMs: 70000}},
+    upgrades: {pulse: 1, cryo: 0, firewall: 0},
+    pendingRewardStage: 1,
+    completed: false,
+  })));
+  await page.reload();
+  assert.equal(await page.locator('#scenario-continue-detail').innerText(), 'UPGRADE READY · STAGE 01');
+  await page.locator('#scenario-continue-btn').click();
+  assert.deepEqual(await page.evaluate(() => ({
+    rewardVisible: document.querySelector('#scenario-reward-screen').style.display !== 'none',
+    mapVisible: document.querySelector('#scenario-map-screen').style.display !== 'none',
+    focused: document.activeElement === document.querySelector('#scenario-reward-options button'),
+  })), {rewardVisible: true, mapVisible: false, focused: true});
+  const guardedReward = await page.evaluate(() => {
+    const before = JSON.stringify(scenarioProgress);
+    const invalid = chooseScenarioUpgrade('invalid');
+    const invalidUnchanged = JSON.stringify(scenarioProgress) === before;
+    showScenarioMap();
+    const routed = document.querySelector('#scenario-reward-screen').style.display !== 'none'
+      && document.querySelector('#scenario-map-screen').style.display === 'none';
+    const chosen = chooseScenarioUpgrade('cryo');
+    const repeated = chooseScenarioUpgrade('firewall');
+    return {invalid, invalidUnchanged, routed, chosen, repeated, progress: scenarioProgress};
+  });
+  assert.deepEqual(guardedReward, {
+    invalid: false,
+    invalidUnchanged: true,
+    routed: true,
+    chosen: true,
+    repeated: false,
+    progress: {
+      version: 1,
+      unlockedStage: 2,
+      results: {'1': {stars: 3, bestTimeMs: 70000}},
+      upgrades: {pulse: 1, cryo: 1, firewall: 0},
+      pendingRewardStage: null,
+      completed: false,
+    },
+  }, 'pending rewards must be validated, unavoidable, and selectable only once');
+
+  const merged = await page.evaluate(() => {
+    scenarioProgress.unlockedStage = 5;
+    startScenarioStage(1);
+    elapsedTime = 100000;
+    completeScenarioStage();
+    const slower = {...scenarioProgress.results[1]};
+    startScenarioStage(1);
+    elapsedTime = 60000;
+    completeScenarioStage();
+    return {slower, faster: scenarioProgress.results[1], unlocked: scenarioProgress.unlockedStage};
+  });
+  assert.deepEqual(merged, {
+    slower: {stars: 3, bestTimeMs: 70000},
+    faster: {stars: 3, bestTimeMs: 60000},
+    unlocked: 5,
+  }, 'replays must merge best stars and time without reducing unlocked progress');
+
+  const failed = await page.evaluate(() => {
+    scenarioProgress.upgrades.firewall = 2;
+    scenarioProgress.pendingRewardStage = 1;
+    writeScenarioProgress();
+    startScenarioStage(1);
+    const progress = JSON.stringify(scenarioProgress);
+    const stored = localStorage.getItem('neonDropScenario');
+    const result = failScenarioStage('SYSTEM OVERLOAD');
+    return {
+      result,
+      progressUnchanged: JSON.stringify(scenarioProgress) === progress,
+      storedUnchanged: localStorage.getItem('neonDropScenario') === stored,
+      label: document.querySelector('#scenario-result-stars').getAttribute('aria-label'),
+      rewardVisible: document.querySelector('#scenario-reward-open-btn').style.display !== 'none',
+    };
+  });
+  assert.deepEqual(failed, {
+    result: true,
+    progressUnchanged: true,
+    storedUnchanged: true,
+    label: '0 of 3 stars',
+    rewardVisible: false,
+  });
+  await page.locator('#scenario-retry-btn').click();
+  assert.deepEqual(await page.evaluate(() => ({
+    stage: activeScenarioStage.id,
+    firewall: scenarioProgress.upgrades.firewall,
+    pending: scenarioProgress.pendingRewardStage,
+    resolved: scenarioResolved,
+  })), {stage: 1, firewall: 2, pending: 1, resolved: false},
+  'Retry must cleanly replay the same stage without consuming a pending reward');
+
+  await page.evaluate(() => {
+    scenarioProgress = {
+      version: 1, unlockedStage: 5, results: {},
+      upgrades: {pulse: 0, cryo: 0, firewall: 0}, pendingRewardStage: null, completed: false,
+    };
+    writeScenarioProgress();
+    startScenarioStage(5);
+    elapsedTime = 200000;
+    completeScenarioStage();
+  });
+  assert.deepEqual(await page.evaluate(() => ({
+    result: scenarioProgress.results[5],
+    unlocked: scenarioProgress.unlockedStage,
+    completed: scenarioProgress.completed,
+    pending: scenarioProgress.pendingRewardStage,
+    rewardVisible: document.querySelector('#scenario-reward-open-btn').style.display !== 'none',
+  })), {
+    result: {stars: 3, bestTimeMs: 200000},
+    unlocked: 5,
+    completed: true,
+    pending: null,
+    rewardVisible: false,
+  });
+  await page.locator('#scenario-result-map-btn').click();
+  assert.equal(await page.locator('#scenario-map-screen').isVisible(), true);
+  await page.locator('#scenario-map-back-btn').click();
+  assert.equal(await page.locator('#scenario-continue-detail').innerText(), 'CHAMPION · 5/5 STAGES');
+  assert.equal(pageErrors.length, 0, 'campaign rewards and results must not throw page errors');
   await page.close();
 }
 
@@ -1419,13 +1635,13 @@ async function testScenarioRivalsAndUpgrades(browser, url) {
   assert.deepEqual(scenarioResults, {
     win: {
       title: 'STAGE CLEAR', opponentGameOver: true, event: 'match-win',
-      progressUnchanged: true, stars: '', once: true,
+      progressUnchanged: false, stars: '★★★', once: true,
     },
     loss: {
       title: 'You Lose!', scenarioVisible: true, gameOverVisible: false,
       highScoreVisible: false, event: 'match-lose',
     },
-  }, 'scenario rival results must use the campaign shell without persistence or leaderboard input');
+  }, 'scenario rival results must persist wins without exposing leaderboard input');
 
   const pulse = await page.evaluate(() => {
     scenarioProgress.upgrades = {pulse: 2, cryo: 0, firewall: 0};
@@ -1601,6 +1817,7 @@ async function testUsabilityUI(browser, url) {
     await testPreferencePersistence(browser, url);
     await testScenarioMap(browser, url);
     await testScenarioMapNavigation(browser, url);
+    await testScenarioRewards(browser, url);
     await testScenarioLineStages(browser, url);
     await testAnimationFrameScheduling(browser, url);
     await testExitGame(browser, url);

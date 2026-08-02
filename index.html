@@ -840,9 +840,15 @@
             <p id="scenario-result-stars" role="img" aria-label="0 of 3 stars"></p>
             <p id="scenario-result-detail"></p>
             <div class="scenario-actions">
+                <button id="scenario-reward-open-btn" type="button" style="display: none;">Choose Upgrade</button>
                 <button id="scenario-retry-btn" type="button">Retry Stage</button>
                 <button id="scenario-result-map-btn" type="button">Campaign Map</button>
             </div>
+        </div>
+
+        <div id="scenario-reward-screen" class="modal" style="display: none;" aria-labelledby="scenario-reward-title">
+            <h2 id="scenario-reward-title">CHOOSE YOUR UPGRADE</h2>
+            <div id="scenario-reward-options" class="scenario-actions"></div>
         </div>
 
         <div id="exit-screen" class="modal" style="display:none;">

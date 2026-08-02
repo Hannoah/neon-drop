@@ -29,9 +29,11 @@ import { createRenderer } from './src/js/renderer.js';
 import { readLeaderboard, writeLeaderboard, renderLeaderboard } from './src/js/leaderboard.js';
 import {
     SCENARIO_STAGES,
+    SCENARIO_UPGRADES,
     createScenarioProgress,
     normalizeScenarioProgress,
     canPlayScenarioStage,
+    starsForScenarioStage,
     scenarioUpgradeEffects,
 } from './src/js/scenario.js';
 
@@ -80,8 +82,11 @@ const scenarioResultScreen = document.getElementById('scenario-result-screen');
 const scenarioResultTitle = document.getElementById('scenario-result-title');
 const scenarioResultStars = document.getElementById('scenario-result-stars');
 const scenarioResultDetail = document.getElementById('scenario-result-detail');
+const scenarioRewardOpenBtn = document.getElementById('scenario-reward-open-btn');
 const scenarioRetryBtn = document.getElementById('scenario-retry-btn');
 const scenarioResultMapBtn = document.getElementById('scenario-result-map-btn');
+const scenarioRewardScreen = document.getElementById('scenario-reward-screen');
+const scenarioRewardOptions = document.getElementById('scenario-reward-options');
 const viewLeaderboardBtn = document.getElementById('view-leaderboard-btn');
 const menuExitBtn = document.getElementById('menu-exit-btn');
 const exitReturnBtn = document.getElementById('exit-return-btn');
@@ -301,6 +306,7 @@ function hideModalScreens() {
     scenarioMapScreen.style.display = 'none';
     scenarioBriefingScreen.style.display = 'none';
     scenarioResultScreen.style.display = 'none';
+    scenarioRewardScreen.style.display = 'none';
 }
 
 function renderScenarioMap() {
@@ -346,11 +352,13 @@ function renderScenarioMap() {
 }
 
 function showScenarioMap() {
+    if (scenarioProgress.pendingRewardStage !== null) return showScenarioReward();
     renderScenarioMap();
     hideModalScreens();
     scenarioMapScreen.style.display = 'block';
     const selectedButton = scenarioStageList.querySelector(`[data-scenario-stage="${selectedScenarioStageId}"]`);
     openModal('scenario-map-title', selectedButton);
+    return true;
 }
 
 function showScenarioBriefing() {
@@ -854,12 +862,18 @@ function completeScenarioStage() {
     cancelScheduledUpdate();
     stopBGM();
     touchControls.hidden = true;
-    hideModalScreens();
-    scenarioResultTitle.textContent = 'STAGE CLEAR';
-    scenarioResultStars.textContent = '';
-    scenarioResultDetail.textContent = `${activeScenarioStage.name} · ${formatElapsedTime(elapsedTime)}`;
-    scenarioResultScreen.style.display = 'block';
-    openModal('scenario-result-title', scenarioRetryBtn);
+    const stageId = activeScenarioStage.id;
+    const stars = starsForScenarioStage(activeScenarioStage, elapsedTime);
+    const previous = scenarioProgress.results[stageId];
+    scenarioProgress.results[stageId] = {
+        stars: Math.max(previous?.stars || 0, stars),
+        bestTimeMs: previous ? Math.min(previous.bestTimeMs, elapsedTime) : elapsedTime,
+    };
+    scenarioProgress.unlockedStage = Math.max(scenarioProgress.unlockedStage, Math.min(5, stageId + 1));
+    scenarioProgress.pendingRewardStage = stageId < 5 ? stageId : null;
+    if (stageId === 5) scenarioProgress.completed = true;
+    writeScenarioProgress();
+    showScenarioResult(true, stars);
     return true;
 }
 
@@ -870,12 +884,51 @@ function failScenarioStage(title) {
     cancelScheduledUpdate();
     stopBGM();
     touchControls.hidden = true;
+    showScenarioResult(false, 0, title);
+    return true;
+}
+
+function showScenarioResult(success, stars = 0, failureTitle = 'SYSTEM OVERLOAD') {
     hideModalScreens();
-    scenarioResultTitle.textContent = title;
-    scenarioResultStars.textContent = '';
-    scenarioResultDetail.textContent = 'Retry Stage';
+    scenarioResultTitle.textContent = success ? 'STAGE CLEAR' : failureTitle;
+    scenarioResultStars.textContent = success ? '★'.repeat(stars) : '';
+    scenarioResultStars.setAttribute('aria-label', `${success ? stars : 0} of 3 stars`);
+    scenarioResultDetail.textContent = success
+        ? `${activeScenarioStage.name} · TIME ${formatElapsedTime(elapsedTime)}`
+        : 'Retry Stage';
+    scenarioRewardOpenBtn.style.display = success && activeScenarioStage.id < 5 ? '' : 'none';
     scenarioResultScreen.style.display = 'block';
     openModal('scenario-result-title', scenarioRetryBtn);
+}
+
+function showScenarioReward() {
+    if (!Number.isInteger(scenarioProgress.pendingRewardStage)) return false;
+    const buttons = SCENARIO_UPGRADES.map(upgrade => {
+        const stack = scenarioProgress.upgrades[upgrade.id];
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.scenarioUpgrade = upgrade.id;
+        button.dataset.stack = stack;
+        button.textContent = `${upgrade.name}\n${upgrade.description}\nCURRENT ${stack} / 4`;
+        button.addEventListener('click', () => chooseScenarioUpgrade(upgrade.id));
+        return button;
+    });
+    scenarioRewardOptions.replaceChildren(...buttons);
+    hideModalScreens();
+    scenarioRewardScreen.style.display = 'block';
+    openModal('scenario-reward-title', buttons[0]);
+    return true;
+}
+
+function chooseScenarioUpgrade(id) {
+    if (!Number.isInteger(scenarioProgress.pendingRewardStage)
+        || scenarioProgress.pendingRewardStage < 1 || scenarioProgress.pendingRewardStage > 4
+        || !SCENARIO_UPGRADES.some(upgrade => upgrade.id === id)) return false;
+    scenarioProgress.upgrades[id] = Math.min(4, scenarioProgress.upgrades[id] + 1);
+    scenarioProgress.pendingRewardStage = null;
+    writeScenarioProgress();
+    selectedScenarioStageId = scenarioProgress.unlockedStage;
+    showScenarioMap();
     return true;
 }
 
@@ -911,7 +964,9 @@ function showStartScreen() {
     hideModalScreens();
     startScreen.style.display = 'block';
     const unlockedStage = SCENARIO_STAGES[scenarioProgress.unlockedStage - 1];
-    scenarioContinueDetail.textContent = scenarioProgress.completed
+    scenarioContinueDetail.textContent = scenarioProgress.pendingRewardStage !== null
+        ? `UPGRADE READY · STAGE ${String(scenarioProgress.pendingRewardStage).padStart(2, '0')}`
+        : scenarioProgress.completed
         ? 'CHAMPION · 5/5 STAGES'
         : `STAGE ${String(unlockedStage.id).padStart(2, '0')} · ${unlockedStage.rival}`;
     openModal('start-screen-title', scenarioContinueBtn);
@@ -1015,6 +1070,7 @@ scenarioBriefingBackBtn.addEventListener('click', showScenarioMap);
 scenarioStageStartBtn.addEventListener('click', () => startScenarioStage(selectedScenarioStageId));
 scenarioRetryBtn.addEventListener('click', () => startScenarioStage(activeScenarioStage.id));
 scenarioResultMapBtn.addEventListener('click', leaveScenarioForMap);
+scenarioRewardOpenBtn.addEventListener('click', showScenarioReward);
 scenarioResetBtn.addEventListener('click', () => {
     if (!window.confirm('Neon Circuit 진행도를 초기화하시겠습니까?')) return;
     scenarioProgress = createScenarioProgress();
@@ -1259,12 +1315,13 @@ const exposed = {
     createScenarioProgress, readScenarioProgress, writeScenarioProgress, renderScenarioMap,
     showScenarioMap, showScenarioBriefing, startScenarioStage, canPlayScenarioStage,
     completeScenarioLineProgress, updateScenarioState, completeScenarioStage,
-    failScenarioStage, leaveScenarioForMap, playerGarbageActive, hasScenarioOpponent,
+    failScenarioStage, showScenarioResult, showScenarioReward, chooseScenarioUpgrade,
+    leaveScenarioForMap, playerGarbageActive, hasScenarioOpponent,
     opponentPlayActive, scenarioUpgradeEffects,
     themeMelody, themeMelodyName,
     isBgmRunning: isBGMRunning,
     PIECE_TYPES, SPRINT_TARGET_LINES, VERSUS_WIDTH, VERSUS_HEIGHT, MAX_PENDING_GARBAGE,
-    SCENARIO_STAGES,
+    SCENARIO_STAGES, SCENARIO_UPGRADES, starsForScenarioStage,
 };
 //Live-bound scalar state: tests read these via window.<name> and mutate them too.
 const liveState = {
