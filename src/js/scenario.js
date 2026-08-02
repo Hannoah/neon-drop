@@ -29,7 +29,6 @@ function validUpgradeStack(value) {
 
 function validResult(value) {
     return value && typeof value === 'object'
-        && Number.isInteger(value.stage) && value.stage >= 1 && value.stage <= 5
         && Number.isInteger(value.stars) && value.stars >= 1 && value.stars <= 3
         && Number.isFinite(value.bestTimeMs) && value.bestTimeMs >= 0;
 }
@@ -43,7 +42,11 @@ export function normalizeScenarioProgress(value) {
     const progress = createScenarioProgress();
     progress.unlockedStage = value.unlockedStage;
     if (value.results && typeof value.results === 'object' && !Array.isArray(value.results)) {
-        progress.results = Object.fromEntries(Object.entries(value.results).filter(([, result]) => validResult(result)));
+        progress.results = Object.fromEntries(Object.entries(value.results).flatMap(([stage, result]) => {
+            const stageId = Number(stage);
+            return Number.isInteger(stageId) && stageId >= 1 && stageId <= 5 && validResult(result)
+                ? [[stage, {stars: result.stars, bestTimeMs: result.bestTimeMs}]] : [];
+        }));
     }
     const upgrades = value.upgrades && typeof value.upgrades === 'object' ? value.upgrades : {};
     progress.upgrades = {

@@ -29,6 +29,18 @@ test('normalizeScenarioProgress falls back for invalid progress', () => {
     assert.deepEqual(normalizeScenarioProgress({unlockedStage: 99, upgrades: {pulse: -2}}), createScenarioProgress());
 });
 
+test('normalizeScenarioProgress keeps results with valid stage keys only', () => {
+    const progress = normalizeScenarioProgress({
+        version: 1,
+        unlockedStage: 1,
+        results: {
+            1: {stars: 2, bestTimeMs: 90000},
+            outside: {stage: 1, stars: 3, bestTimeMs: 1},
+        },
+    });
+    assert.deepEqual(progress.results, {1: {stars: 2, bestTimeMs: 90000}});
+});
+
 test('canPlayScenarioStage allows unlocked stages only', () => {
     const progress = {...createScenarioProgress(), unlockedStage: 3};
     assert.equal(canPlayScenarioStage(progress, 3), true);
