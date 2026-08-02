@@ -292,6 +292,7 @@
         #scenario-briefing-screen dt { color: var(--hud-muted); font-size: 11px; }
         #scenario-briefing-screen dd { margin-left: 0; }
         .scenario-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+        #scenario-result-stars { min-height: 1em; color: var(--danger); }
         .secondary-panel summary {
             color: #d6e7f5;
             cursor: pointer;
@@ -499,6 +500,7 @@
             white-space: nowrap;
         }
         #mode, #timer { color: #c9d9e8 !important; font-size: 11px !important; }
+        #scenario-objective { color: var(--danger); font-size: 10px; font-weight: 800; letter-spacing: 0.08em; }
         .header-actions { display: flex; align-items: center; gap: 6px; }
         .header-menu { position: relative; }
         .header-menu summary,
@@ -685,6 +687,7 @@
             <div class="match-meta">
                 <span id="mode">Mode: Marathon</span>
                 <span id="timer">Time: 00:00</span>
+                <span id="scenario-objective" hidden>OBJECTIVE 0 / 8</span>
             </div>
             <nav class="header-actions" aria-label="Game options">
                 <details class="header-menu">
@@ -829,6 +832,16 @@
             <div class="scenario-actions">
                 <button id="scenario-stage-start-btn" type="button">Start Stage</button>
                 <button id="scenario-briefing-back-btn" type="button">Back to Map</button>
+            </div>
+        </div>
+
+        <div id="scenario-result-screen" class="modal" style="display: none;" aria-labelledby="scenario-result-title">
+            <h2 id="scenario-result-title">STAGE CLEAR</h2>
+            <p id="scenario-result-stars"></p>
+            <p id="scenario-result-detail"></p>
+            <div class="scenario-actions">
+                <button id="scenario-retry-btn" type="button">Retry Stage</button>
+                <button id="scenario-result-map-btn" type="button">Campaign Map</button>
             </div>
         </div>
 

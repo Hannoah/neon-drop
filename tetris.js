@@ -32,6 +32,7 @@ import {
     createScenarioProgress,
     normalizeScenarioProgress,
     canPlayScenarioStage,
+    scenarioUpgradeEffects,
 } from './src/js/scenario.js';
 
 const canvas = document.getElementById('tetris');
@@ -74,6 +75,13 @@ const scenarioBriefingObjective = document.getElementById('scenario-briefing-obj
 const scenarioBriefingModifier = document.getElementById('scenario-briefing-modifier');
 const scenarioStageStartBtn = document.getElementById('scenario-stage-start-btn');
 const scenarioBriefingBackBtn = document.getElementById('scenario-briefing-back-btn');
+const scenarioObjective = document.getElementById('scenario-objective');
+const scenarioResultScreen = document.getElementById('scenario-result-screen');
+const scenarioResultTitle = document.getElementById('scenario-result-title');
+const scenarioResultStars = document.getElementById('scenario-result-stars');
+const scenarioResultDetail = document.getElementById('scenario-result-detail');
+const scenarioRetryBtn = document.getElementById('scenario-retry-btn');
+const scenarioResultMapBtn = document.getElementById('scenario-result-map-btn');
 const viewLeaderboardBtn = document.getElementById('view-leaderboard-btn');
 const menuExitBtn = document.getElementById('menu-exit-btn');
 const exitReturnBtn = document.getElementById('exit-return-btn');
@@ -142,6 +150,9 @@ let matchEventLog = [];
 let scenarioProgress = readScenarioProgress();
 let selectedScenarioStageId = scenarioProgress.unlockedStage;
 let activeScenarioStage = null;
+let scenarioHazardTimer = 0;
+let firewallCharges = 0;
+let scenarioResolved = false;
 
 let isGameOver = false;
 let isPaused = false;
@@ -289,6 +300,7 @@ function hideModalScreens() {
     exitScreen.style.display = 'none';
     scenarioMapScreen.style.display = 'none';
     scenarioBriefingScreen.style.display = 'none';
+    scenarioResultScreen.style.display = 'none';
 }
 
 function renderScenarioMap() {
@@ -403,9 +415,23 @@ function queueGarbageForOpponent(amount) {
 }
 
 function queueGarbageForPlayer(amount) {
-    if (gameMode !== 'versus' || amount <= 0) return;
+    if (!playerGarbageActive() || amount <= 0) return;
     playerPendingGarbage = Math.min(MAX_PENDING_GARBAGE, playerPendingGarbage + amount);
     emitMatchEvent('attack-sent', {from: 'ai', amount});
+}
+
+function playerGarbageActive() {
+    return gameMode === 'versus'
+        || (gameMode === 'scenario' && activeScenarioStage?.id >= 3);
+}
+
+function scenarioDropInterval() {
+    const stepMs = gameMode === 'scenario' && activeScenarioStage
+        ? activeScenarioStage.dropStepMs : 100;
+    const base = Math.max(100, 1000 - (player.level - 1) * stepMs);
+    const multiplier = gameMode === 'scenario'
+        ? scenarioUpgradeEffects(scenarioProgress.upgrades).dropIntervalMultiplier : 1;
+    return Math.round(base * multiplier);
 }
 
 function applyPendingGarbage(target, count, recipient) {
@@ -430,7 +456,8 @@ function scoreLines(rowCount, pivot = false) {
         comboTimer = 2000;
         player.lines += rowCount;
         player.level = Math.floor(player.lines / 10) + 1;
-        dropInterval = Math.max(100, 1000 - (player.level - 1) * 100);
+        dropInterval = scenarioDropInterval();
+        completeScenarioLineProgress(rowCount);
     } else if (!pivot) {
         combo = 0;
     }
@@ -634,12 +661,14 @@ function playerReset() {
                    (player.matrix[0].length / 2 | 0);
     player.canHold = true;
     player.lockTimer = 0;
-    if (gameMode === 'versus' && playerPendingGarbage > 0) {
+    if (playerGarbageActive() && playerPendingGarbage > 0) {
         const incoming = playerPendingGarbage;
         playerPendingGarbage = 0;
         if (applyPendingGarbage(arena, incoming, 'player')) {
             if (gameMode === 'versus') {
                 endVersusMatch('You Lose!', 'match-lose');
+            } else if (activeScenarioStage?.kind === 'lines') {
+                failScenarioStage('SYSTEM OVERLOAD');
             } else {
                 showHighScoreModal();
             }
@@ -649,6 +678,8 @@ function playerReset() {
     if (collide(arena, player)) {
         if (gameMode === 'versus') {
             endVersusMatch('You Lose!', 'match-lose');
+        } else if (gameMode === 'scenario' && activeScenarioStage?.kind === 'lines') {
+            failScenarioStage('SYSTEM OVERLOAD');
         } else {
             showHighScoreModal();
         }
@@ -687,6 +718,8 @@ function update(time = 0) {
     lastTime = time;
 
     elapsedTime += Math.max(0, deltaTime);
+    updateScenarioState(Math.max(0, deltaTime));
+    if (scenarioResolved) return;
     dropCounter += deltaTime;
     if (dropCounter > dropInterval) {
         playerDrop();
@@ -747,6 +780,86 @@ function updateScore() {
     playerGarbageElement.innerText = 'YOU INCOMING ' + String(playerPendingGarbage).padStart(2, '0');
     opponentGarbageMeter.style.width = `${opponent.pendingGarbage / MAX_PENDING_GARBAGE * 100}%`;
     playerGarbageMeter.style.width = `${playerPendingGarbage / MAX_PENDING_GARBAGE * 100}%`;
+    const scenarioActive = gameMode === 'scenario' && Boolean(activeScenarioStage);
+    scenarioObjective.hidden = !scenarioActive;
+    if (scenarioActive) {
+        scenarioObjective.textContent = activeScenarioStage.kind === 'lines'
+            ? `OBJECTIVE ${Math.min(player.lines, activeScenarioStage.lineGoal)} / ${activeScenarioStage.lineGoal}`
+            : 'OBJECTIVE DEFEAT RIVAL';
+    }
+}
+
+function completeScenarioLineProgress(rowCount) {
+    if (rowCount <= 0 || gameMode !== 'scenario' || scenarioResolved
+        || activeScenarioStage?.kind !== 'lines') return false;
+    if (player.lines < activeScenarioStage.lineGoal) return false;
+    completeScenarioStage();
+    return true;
+}
+
+function updateScenarioState(deltaTime) {
+    if (gameMode !== 'scenario' || !activeScenarioStage || scenarioResolved || isPaused) return;
+    if (activeScenarioStage.timeLimitMs !== null && elapsedTime >= activeScenarioStage.timeLimitMs) {
+        failScenarioStage('Time Up!');
+        return;
+    }
+    if (!activeScenarioStage.hazardIntervalMs) return;
+    scenarioHazardTimer -= deltaTime;
+    if (scenarioHazardTimer <= 0) {
+        queueGarbageForPlayer(1);
+        scenarioHazardTimer = activeScenarioStage.hazardIntervalMs;
+        lastEventMessage = 'INTERFERENCE +1';
+        eventMessageTimer = 2000;
+        updateScore();
+    }
+}
+
+function completeScenarioStage() {
+    if (gameMode !== 'scenario' || !activeScenarioStage || scenarioResolved) return false;
+    scenarioResolved = true;
+    isGameOver = true;
+    cancelScheduledUpdate();
+    stopBGM();
+    touchControls.hidden = true;
+    hideModalScreens();
+    scenarioResultTitle.textContent = 'STAGE CLEAR';
+    scenarioResultStars.textContent = '';
+    scenarioResultDetail.textContent = `${activeScenarioStage.name} · ${formatElapsedTime(elapsedTime)}`;
+    scenarioResultScreen.style.display = 'block';
+    openModal('scenario-result-title', scenarioRetryBtn);
+    return true;
+}
+
+function failScenarioStage(title) {
+    if (gameMode !== 'scenario' || !activeScenarioStage || scenarioResolved) return false;
+    scenarioResolved = true;
+    isGameOver = true;
+    cancelScheduledUpdate();
+    stopBGM();
+    touchControls.hidden = true;
+    hideModalScreens();
+    scenarioResultTitle.textContent = title;
+    scenarioResultStars.textContent = '';
+    scenarioResultDetail.textContent = 'Retry Stage';
+    scenarioResultScreen.style.display = 'block';
+    openModal('scenario-result-title', scenarioRetryBtn);
+    return true;
+}
+
+function leaveScenarioForMap() {
+    const stageId = activeScenarioStage?.id ?? selectedScenarioStageId;
+    cancelScheduledUpdate();
+    stopBGM();
+    isPaused = false;
+    isGameOver = true;
+    resetGameState();
+    activeScenarioStage = null;
+    selectedScenarioStageId = stageId;
+    touchControls.hidden = true;
+    scenarioObjective.hidden = true;
+    opponentPanel.style.display = 'none';
+    gameContainer.classList.remove('versus-active');
+    showScenarioMap();
 }
 
 function updateLeaderboard() {
@@ -760,6 +873,7 @@ function showStartScreen() {
     }
     opponentPanel.style.display = 'none';
     touchControls.hidden = true;
+    scenarioObjective.hidden = true;
     gameContainer.classList.remove('versus-active');
     hideModalScreens();
     startScreen.style.display = 'block';
@@ -866,6 +980,8 @@ scenarioPlayBtn.addEventListener('click', showScenarioBriefing);
 scenarioMapBackBtn.addEventListener('click', showStartScreen);
 scenarioBriefingBackBtn.addEventListener('click', showScenarioMap);
 scenarioStageStartBtn.addEventListener('click', () => startScenarioStage(selectedScenarioStageId));
+scenarioRetryBtn.addEventListener('click', () => startScenarioStage(activeScenarioStage.id));
+scenarioResultMapBtn.addEventListener('click', leaveScenarioForMap);
 scenarioResetBtn.addEventListener('click', () => {
     if (!window.confirm('Neon Circuit 진행도를 초기화하시겠습니까?')) return;
     scenarioProgress = createScenarioProgress();
@@ -979,7 +1095,7 @@ function resetGameState() {
     comboTimer = 0;
     shakeTime = 0;
     flashingLines = [];
-    dropInterval = 1000;
+    dropInterval = scenarioDropInterval();
     elapsedTime = 0;
     backToBackActive = false;
     lastActionWasRotate = false;
@@ -987,6 +1103,10 @@ function resetGameState() {
     eventMessageTimer = 0;
     playerPendingGarbage = 0;
     matchEventLog = [];
+    scenarioHazardTimer = gameMode === 'scenario'
+        ? activeScenarioStage?.hazardIntervalMs || 0 : 0;
+    firewallCharges = 0;
+    scenarioResolved = false;
     resetOpponentState();
 
     drawHold();
@@ -1012,6 +1132,8 @@ function playerHold() {
         if (collide(arena, player)) {
             if (gameMode === 'versus') {
                 endVersusMatch('You Lose!', 'match-lose');
+            } else if (gameMode === 'scenario' && activeScenarioStage?.kind === 'lines') {
+                failScenarioStage('SYSTEM OVERLOAD');
             } else {
                 showHighScoreModal();
             }
@@ -1102,6 +1224,8 @@ const exposed = {
     togglePause, quitGame, returnToMenu, selectGameMode, canAcceptGameInput, update, formatElapsedTime,
     createScenarioProgress, readScenarioProgress, writeScenarioProgress, renderScenarioMap,
     showScenarioMap, showScenarioBriefing, startScenarioStage, canPlayScenarioStage,
+    completeScenarioLineProgress, updateScenarioState, completeScenarioStage,
+    failScenarioStage, leaveScenarioForMap, playerGarbageActive, scenarioUpgradeEffects,
     themeMelody, themeMelodyName,
     isBgmRunning: isBGMRunning,
     PIECE_TYPES, SPRINT_TARGET_LINES, VERSUS_WIDTH, VERSUS_HEIGHT, MAX_PENDING_GARBAGE,
@@ -1126,6 +1250,11 @@ const liveState = {
     scenarioProgress: [() => scenarioProgress, (v) => { scenarioProgress = v; }],
     selectedScenarioStageId: [() => selectedScenarioStageId, (v) => { selectedScenarioStageId = v; }],
     activeScenarioStage: [() => activeScenarioStage, (v) => { activeScenarioStage = v; }],
+    scenarioHazardTimer: [() => scenarioHazardTimer, (v) => { scenarioHazardTimer = v; }],
+    firewallCharges: [() => firewallCharges, (v) => { firewallCharges = v; }],
+    scenarioResolved: [() => scenarioResolved, (v) => { scenarioResolved = v; }],
+    dropInterval: [() => dropInterval, (v) => { dropInterval = v; }],
+    eventMessageTimer: [() => eventMessageTimer, (v) => { eventMessageTimer = v; }],
 };
 
 for (const [name, value] of Object.entries(exposed)) {

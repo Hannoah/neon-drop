@@ -350,6 +350,193 @@ async function testScenarioMapNavigation(browser, url) {
   await page.close();
 }
 
+async function testScenarioLineStages(browser, url) {
+  const { page, pageErrors } = await openPage(browser, url);
+  await page.evaluate(() => localStorage.removeItem('neonDropScenario'));
+  await page.reload();
+
+  await page.locator('#scenario-continue-btn').click();
+  await page.locator('#scenario-play-btn').click();
+  await page.locator('#scenario-stage-start-btn').click();
+  assert.deepEqual(await page.evaluate(() => ({
+    stage: activeScenarioStage?.id,
+    objective: document.querySelector('#scenario-objective')?.textContent,
+    objectiveVisible: document.querySelector('#scenario-objective')?.hidden === false,
+  })), {stage: 1, objective: 'OBJECTIVE 0 / 8', objectiveVisible: true},
+  'stage 1 must start through briefing with a visible line objective');
+
+  const progressBefore = await page.evaluate(() => JSON.stringify(scenarioProgress));
+  const completed = await page.evaluate(() => {
+    player.lines = 7;
+    scoreLines(1, false);
+    completeScenarioStage();
+    return {
+      lines: player.lines,
+      resolved: scenarioResolved,
+      title: document.querySelector('#scenario-result-title')?.textContent,
+      detail: document.querySelector('#scenario-result-detail')?.textContent,
+      objective: document.querySelector('#scenario-objective')?.textContent,
+      resultVisible: document.querySelector('#scenario-result-screen')?.style.display !== 'none',
+      focused: document.activeElement?.id,
+      progress: JSON.stringify(scenarioProgress),
+    };
+  });
+  assert.equal(completed.lines, 8);
+  assert.equal(completed.resolved, true);
+  assert.equal(completed.title, 'STAGE CLEAR');
+  assert.match(completed.detail, /Boot Sequence.*00:00/);
+  assert.equal(completed.objective, 'OBJECTIVE 8 / 8');
+  assert.equal(completed.resultVisible, true);
+  assert.equal(completed.focused, 'scenario-retry-btn');
+  assert.equal(completed.progress, progressBefore,
+    'Task 4 completion must not unlock, rate, or persist a result');
+
+  await page.locator('#scenario-retry-btn').click();
+  assert.deepEqual(await page.evaluate(() => ({
+    stage: activeScenarioStage?.id,
+    lines: player.lines,
+    boardBlocks: arena.flat().filter(Boolean).length,
+    playerReady: Boolean(player.matrix),
+    resultHidden: document.querySelector('#scenario-result-screen').style.display === 'none',
+    resolved: scenarioResolved,
+    progress: JSON.stringify(scenarioProgress),
+  })), {
+    stage: 1, lines: 0, boardBlocks: 0, playerReady: true,
+    resultHidden: true, resolved: false, progress: progressBefore,
+  }, 'Retry Stage must restart the same clean stage without changing campaign progress');
+
+  const timeout = await page.evaluate(() => {
+    scenarioProgress.unlockedStage = 3;
+    startScenarioStage(2);
+    const progress = JSON.stringify(scenarioProgress);
+    elapsedTime = 149999;
+    updateScenarioState(0);
+    const beforeLimit = scenarioResolved;
+    elapsedTime = 150000;
+    updateScenarioState(0);
+    return {
+      beforeLimit,
+      resolved: scenarioResolved,
+      title: document.querySelector('#scenario-result-title').textContent,
+      progressUnchanged: JSON.stringify(scenarioProgress) === progress,
+    };
+  });
+  assert.deepEqual(timeout, {
+    beforeLimit: false, resolved: true, title: 'Time Up!', progressUnchanged: true,
+  }, 'stage 2 must fail only when its exact time limit is reached');
+
+  const ramp = await page.evaluate(() => {
+    startScenarioStage(2);
+    player.lines = 9;
+    scoreLines(1, false);
+    const scenarioLevel2 = dropInterval;
+    scenarioProgress.upgrades.cryo = 1;
+    startScenarioStage(1);
+    const cryoLevel1 = dropInterval;
+    scenarioProgress.upgrades.cryo = 0;
+    gameMode = 'marathon';
+    activeScenarioStage = null;
+    resetGameState();
+    player.lines = 9;
+    scoreLines(1, false);
+    return {scenarioLevel2, cryoLevel1, marathonLevel2: dropInterval};
+  });
+  assert.deepEqual(ramp, {scenarioLevel2: 840, cryoLevel1: 1100, marathonLevel2: 900},
+    'scenario ramps and Cryo must apply only in campaign while Marathon keeps its normal step');
+
+  const hazard = await page.evaluate(() => {
+    gameMode = 'scenario';
+    startScenarioStage(3);
+    const interval = scenarioHazardTimer;
+    isPaused = true;
+    updateScenarioState(1000);
+    const paused = {timer: scenarioHazardTimer, pending: playerPendingGarbage};
+    isPaused = false;
+    scenarioHazardTimer = 1;
+    updateScenarioState(1);
+    const queued = {
+      timer: scenarioHazardTimer,
+      pending: playerPendingGarbage,
+      event: lastEventMessage,
+      eventTimer: eventMessageTimer,
+    };
+    player.next = createPiece('D');
+    playerReset();
+    const applied = {
+      pending: playerPendingGarbage,
+      garbageLines: arena.slice(-1)[0].filter(value => value === 8).length,
+    };
+    gameMode = 'marathon';
+    playerPendingGarbage = 0;
+    queueGarbageForPlayer(1);
+    return {interval, paused, queued, applied, marathonPending: playerPendingGarbage};
+  });
+  assert.deepEqual(hazard, {
+    interval: 30000,
+    paused: {timer: 30000, pending: 0},
+    queued: {timer: 30000, pending: 1, event: 'INTERFERENCE +1', eventTimer: 2000},
+    applied: {pending: 0, garbageLines: 11},
+    marathonPending: 0,
+  }, 'stage 3 interference must queue once, pause cleanly, and apply between pieces');
+
+  const overload = await page.evaluate(() => {
+    gameMode = 'scenario';
+    startScenarioStage(3);
+    const progress = JSON.stringify(scenarioProgress);
+    arena[0][0] = 1;
+    playerPendingGarbage = 1;
+    player.next = createPiece('D');
+    playerReset();
+    return {
+      title: document.querySelector('#scenario-result-title').textContent,
+      gameOverVisible: document.querySelector('#game-over-screen').style.display !== 'none',
+      highScoreVisible: document.querySelector('#high-score-input-group').offsetParent !== null,
+      progress,
+    };
+  });
+  assert.equal(overload.title, 'SYSTEM OVERLOAD');
+  assert.equal(overload.gameOverVisible, false,
+    'campaign overload must not open the leaderboard game-over screen');
+  assert.equal(overload.highScoreVisible, false,
+    'campaign overload must not expose leaderboard input');
+
+  await page.locator('#scenario-retry-btn').click();
+  const holdOverload = await page.evaluate(() => {
+    arena.forEach(row => row.fill(0));
+    player.matrix = createPiece('D');
+    player.hold = createPiece('S');
+    player.canHold = true;
+    player.pos = {x: 4, y: 0};
+    for (let y = 0; y < 4; y++) arena[y][5] = 8;
+    playerHold();
+    return {
+      title: document.querySelector('#scenario-result-title').textContent,
+      resultVisible: document.querySelector('#scenario-result-screen').style.display !== 'none',
+      gameOverVisible: document.querySelector('#game-over-screen').style.display !== 'none',
+    };
+  });
+  assert.deepEqual(holdOverload, {
+    title: 'SYSTEM OVERLOAD', resultVisible: true, gameOverVisible: false,
+  }, 'a campaign Hold spawn collision must use the scenario failure result');
+
+  await page.locator('#scenario-result-map-btn').click();
+  assert.deepEqual(await page.evaluate(() => ({
+    mapVisible: document.querySelector('#scenario-map-screen').style.display !== 'none',
+    selected: selectedScenarioStageId,
+    active: activeScenarioStage,
+    progress: JSON.stringify(scenarioProgress),
+  })), {
+    mapVisible: true, selected: 3, active: null, progress: overload.progress,
+  }, 'Campaign Map must keep the failed stage selected without changing progress');
+
+  await page.locator('#scenario-map-back-btn').click();
+  await page.getByRole('button', {name: 'Start Game'}).click();
+  assert.equal(await page.locator('#scenario-objective').isHidden(), true,
+    'quick play must hide the campaign objective');
+  assert.equal(pageErrors.length, 0, 'campaign line stages must not throw page errors');
+  await page.close();
+}
+
 async function testAnimationFrameScheduling(browser, url) {
   const { page, pageErrors } = await openPage(browser, url);
   await page.evaluate(() => {
@@ -1109,6 +1296,7 @@ async function testUsabilityUI(browser, url) {
     await testPreferencePersistence(browser, url);
     await testScenarioMap(browser, url);
     await testScenarioMapNavigation(browser, url);
+    await testScenarioLineStages(browser, url);
     await testAnimationFrameScheduling(browser, url);
     await testExitGame(browser, url);
     await testLayoutSizing(browser, url);
