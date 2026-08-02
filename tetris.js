@@ -191,7 +191,7 @@ const renderer = createRenderer({
     setShakeTime: value => { shakeTime = value; },
     getState: () => ({
         shakeTime, arena, player, combo, flashingLines,
-        gameMode, opponentActive: opponentPlayActive(), opponent,
+        opponentActive: opponentPlayActive(), opponent,
     }),
 });
 const {draw, drawNext, drawHold, drawOpponent} = renderer;
@@ -385,6 +385,7 @@ function startScenarioStage(stageId) {
     hideModalScreens();
     touchControls.hidden = false;
     resetGameState();
+    emitMatchEvent('match-start');
     playerReset();
     lastTime = performance.now();
     scheduleUpdate();

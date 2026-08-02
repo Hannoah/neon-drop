@@ -1298,8 +1298,14 @@ async function testScenarioRivalsAndUpgrades(browser, url) {
 
   const stage4 = await page.evaluate(() => {
     const started = startScenarioStage(4);
+    const matchStart = matchEventLog[0];
+    startScenarioStage(1);
+    const lineStageEvents = matchEventLog.length;
+    startScenarioStage(4);
     return {
       started,
+      matchStart,
+      lineStageEvents,
       scenarioOpponent: hasScenarioOpponent(),
       opponentActive: opponentPlayActive(),
       opponentReady: Boolean(opponent.matrix && opponent.next),
@@ -1311,7 +1317,8 @@ async function testScenarioRivalsAndUpgrades(browser, url) {
     };
   });
   assert.deepEqual(stage4, {
-    started: true, scenarioOpponent: true, opponentActive: true, opponentReady: true,
+    started: true, matchStart: {type: 'match-start'}, lineStageEvents: 0,
+    scenarioOpponent: true, opponentActive: true, opponentReady: true,
     opponentX: stage4.expectedX, expectedX: stage4.expectedX,
     panelVisible: true, layoutActive: true, garbageActive: true,
   }, 'stage 4 must reuse the centered visible opponent board and competitive garbage flow');
@@ -1321,14 +1328,20 @@ async function testScenarioRivalsAndUpgrades(browser, url) {
     opponent.pendingGarbage = 0;
     queueGarbageForOpponent(2);
     const scenario = {pending: opponent.pendingGarbage, event: matchEventLog.at(-1)};
+    scenarioProgress.upgrades.pulse = 2;
+    opponent.pendingGarbage = MAX_PENDING_GARBAGE - 1;
+    queueGarbageForOpponent(5);
+    const capped = opponent.pendingGarbage;
+    scenarioProgress.upgrades.pulse = 0;
     gameMode = 'marathon';
     opponent.pendingGarbage = 0;
     matchEventLog = [];
     queueGarbageForOpponent(2);
-    return {scenario, marathon: {pending: opponent.pendingGarbage, events: matchEventLog.length}};
+    return {scenario, capped, marathon: {pending: opponent.pendingGarbage, events: matchEventLog.length}};
   });
   assert.deepEqual(scenarioQueue, {
     scenario: {pending: 2, event: {type: 'attack-sent', from: 'player', amount: 2}},
+    capped: 20,
     marathon: {pending: 0, events: 0},
   }, 'scenario rivals must receive and record player attacks while Marathon ignores them');
 
@@ -1364,6 +1377,18 @@ async function testScenarioRivalsAndUpgrades(browser, url) {
     stage4Turns: 1, stage5Turns: 2, quickTurns: 1,
     resolvedTurns: 0, gameOverTurns: 0, opponentOverTurns: 0, missingPieceTurns: 0,
   }, 'post-lock AI turns must follow the mode and stop after any terminal state');
+
+  const lockIntegration = await page.evaluate(() => {
+    startScenarioStage(5);
+    opponent.pieceBag = ['A', 'B', 'C', 'D'];
+    const before = opponent.pieceBag.length;
+    player.matrix = createPiece('D');
+    player.pos = {x: 5, y: 18};
+    lockCurrentPiece();
+    return {before, after: opponent.pieceBag.length};
+  });
+  assert.deepEqual(lockIntegration, {before: 4, after: 2},
+    'locking a player piece in stage 5 must execute both configured AI turns');
 
   const scenarioResults = await page.evaluate(() => {
     startScenarioStage(4);
