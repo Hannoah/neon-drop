@@ -15,6 +15,13 @@ function fakeContext() {
     };
 }
 
+function countingContext() {
+    const context = fakeContext();
+    context.fillRectCount = 0;
+    context.fillRect = () => { context.fillRectCount++; };
+    return context;
+}
+
 test('renderer writes the decayed shake value back to game state', () => {
     const context = fakeContext();
     const arena = createMatrix(2, 4);
@@ -38,7 +45,7 @@ test('renderer writes the decayed shake value back to game state', () => {
             player,
             combo: 0,
             flashingLines: [],
-            gameMode: 'marathon',
+            opponentActive: false,
             opponent: {arena, matrix: null, pos: {x: 0, y: 0}},
         }),
         setShakeTime: value => { shakeTime = value; },
@@ -47,4 +54,44 @@ test('renderer writes the decayed shake value back to game state', () => {
     renderer.draw();
 
     assert.equal(shakeTime, 4.5);
+});
+
+test('renderer skips an inactive opponent even when its matrix exists', () => {
+    const opponentContext = countingContext();
+    const arena = createMatrix(2, 4);
+    const renderer = createRenderer({
+        canvas: {width: 2, height: 4}, context: fakeContext(),
+        nextCanvas: {width: 2, height: 2}, nextContext: fakeContext(),
+        holdCanvas: {width: 2, height: 2}, holdContext: fakeContext(),
+        opponentCanvas: {width: 2, height: 4}, opponentContext,
+        VERSUS_WIDTH: 2, VERSUS_HEIGHT: 4,
+        getState: () => ({
+            opponentActive: false,
+            opponent: {arena, matrix: [[1]], pos: {x: 0, y: 0}},
+        }),
+    });
+
+    renderer.drawOpponent();
+
+    assert.equal(opponentContext.fillRectCount, 1, 'only the canvas clear should be drawn');
+});
+
+test('renderer draws an active opponent without depending on game mode', () => {
+    const opponentContext = countingContext();
+    const arena = createMatrix(2, 4);
+    const renderer = createRenderer({
+        canvas: {width: 2, height: 4}, context: fakeContext(),
+        nextCanvas: {width: 2, height: 2}, nextContext: fakeContext(),
+        holdCanvas: {width: 2, height: 2}, holdContext: fakeContext(),
+        opponentCanvas: {width: 2, height: 4}, opponentContext,
+        VERSUS_WIDTH: 2, VERSUS_HEIGHT: 4,
+        getState: () => ({
+            opponentActive: true,
+            opponent: {arena, matrix: [[1]], pos: {x: 0, y: 0}},
+        }),
+    });
+
+    renderer.drawOpponent();
+
+    assert.ok(opponentContext.fillRectCount > 1, 'the opponent piece should be drawn after the clear');
 });

@@ -110,8 +110,8 @@ export function createRenderer({
     function drawOpponent() {
         opponentContext.fillStyle = '#000';
         opponentContext.fillRect(0, 0, VERSUS_WIDTH, VERSUS_HEIGHT);
-        const {gameMode, opponent} = getState();
-        if (gameMode !== 'versus' || !opponent.matrix) return;
+        const {opponentActive, opponent} = getState();
+        if (!opponentActive || !opponent.matrix) return;
 
         drawMatrix(opponent.arena, {x: 0, y: 0}, opponentContext);
         drawMatrix(opponent.matrix, opponent.pos, opponentContext);

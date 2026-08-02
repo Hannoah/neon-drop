@@ -191,7 +191,7 @@ const renderer = createRenderer({
     setShakeTime: value => { shakeTime = value; },
     getState: () => ({
         shakeTime, arena, player, combo, flashingLines,
-        gameMode, opponent,
+        gameMode, opponentActive: opponentPlayActive(), opponent,
     }),
 });
 const {draw, drawNext, drawHold, drawOpponent} = renderer;
@@ -409,7 +409,7 @@ function nextPieceType() {
 }
 
 function queueGarbageForOpponent(amount) {
-    if (gameMode !== 'versus' || amount <= 0) return;
+    if (!opponentPlayActive() || amount <= 0) return;
     opponent.pendingGarbage = Math.min(MAX_PENDING_GARBAGE, opponent.pendingGarbage + amount);
     emitMatchEvent('attack-sent', {from: 'player', amount});
 }
@@ -423,6 +423,14 @@ function queueGarbageForPlayer(amount) {
 function playerGarbageActive() {
     return gameMode === 'versus'
         || (gameMode === 'scenario' && activeScenarioStage?.id >= 3);
+}
+
+function hasScenarioOpponent() {
+    return gameMode === 'scenario' && activeScenarioStage?.kind === 'opponent';
+}
+
+function opponentPlayActive() {
+    return gameMode === 'versus' || hasScenarioOpponent();
 }
 
 function scenarioDropInterval() {
@@ -465,8 +473,10 @@ function scoreLines(rowCount, pivot = false) {
     const {points, attack} = buildScoreResult({
         rowCount, pivot, hadBackToBack, level: player.level, comboValue: combo,
     });
-    player.score += points;
-    queueGarbageForOpponent(attack);
+    const upgradeEffects = gameMode === 'scenario'
+        ? scenarioUpgradeEffects(scenarioProgress.upgrades) : null;
+    player.score += upgradeEffects ? Math.round(points * upgradeEffects.scoreMultiplier) : points;
+    queueGarbageForOpponent(attack > 0 ? attack + (upgradeEffects?.outgoingGarbageBonus || 0) : 0);
     lastEventMessage = eventMessageFor(rowCount, pivot);
     eventMessageTimer = 2000;
     updateScore();
@@ -540,14 +550,19 @@ function playerDrop(manual = false) {
 }
 
 function endVersusMatch(title, eventType) {
-    if (gameMode !== 'versus' || isGameOver) return;
+    if (!opponentPlayActive() || isGameOver || scenarioResolved) return;
     opponent.gameOver = true;
     emitMatchEvent(eventType);
-    showHighScoreModal(title);
+    if (hasScenarioOpponent()) {
+        if (eventType === 'match-win') completeScenarioStage();
+        else failScenarioStage(title);
+    } else {
+        showHighScoreModal(title);
+    }
 }
 
 function runOpponentTurn() {
-    if (gameMode !== 'versus' || isGameOver || opponent.gameOver || !opponent.matrix) return;
+    if (!opponentPlayActive() || isGameOver || scenarioResolved || opponent.gameOver || !opponent.matrix) return;
 
     if (opponent.pendingGarbage > 0) {
         const incoming = opponent.pendingGarbage;
@@ -603,6 +618,18 @@ function runOpponentTurn() {
     updateScore();
 }
 
+function runOpponentTurnsAfterLock() {
+    const turnLimit = gameMode === 'versus' ? 1
+        : (hasScenarioOpponent() ? activeScenarioStage.opponentTurns : 0);
+    let turnsRun = 0;
+    while (turnsRun < turnLimit && !isGameOver && !scenarioResolved
+        && !opponent.gameOver && opponent.matrix) {
+        runOpponentTurn();
+        turnsRun++;
+    }
+    return turnsRun;
+}
+
 function checkSprintCompletion() {
     if (gameMode !== 'sprint' || player.lines < SPRINT_TARGET_LINES) return false;
     showHighScoreModal('Sprint Complete!');
@@ -619,7 +646,7 @@ function lockCurrentPiece() {
     lastActionWasRotate = false;
 
     if (!checkSprintCompletion()) {
-        if (gameMode === 'versus') runOpponentTurn();
+        runOpponentTurnsAfterLock();
         if (!isGameOver) playerReset();
     }
 }
@@ -664,9 +691,15 @@ function playerReset() {
     if (playerGarbageActive() && playerPendingGarbage > 0) {
         const incoming = playerPendingGarbage;
         playerPendingGarbage = 0;
-        if (applyPendingGarbage(arena, incoming, 'player')) {
-            if (gameMode === 'versus') {
-                endVersusMatch('You Lose!', 'match-lose');
+        if (gameMode === 'scenario' && firewallCharges > 0) {
+            firewallCharges--;
+            lastEventMessage = 'FIREWALL BLOCK';
+            eventMessageTimer = 2000;
+            updateScore();
+        } else if (applyPendingGarbage(arena, incoming, 'player')) {
+            if (opponentPlayActive()) {
+                const title = hasScenarioOpponent() ? 'SYSTEM OVERLOAD' : 'You Lose!';
+                endVersusMatch(title, 'match-lose');
             } else if (activeScenarioStage?.kind === 'lines') {
                 failScenarioStage('SYSTEM OVERLOAD');
             } else {
@@ -676,7 +709,7 @@ function playerReset() {
         }
     }
     if (collide(arena, player)) {
-        if (gameMode === 'versus') {
+        if (opponentPlayActive()) {
             endVersusMatch('You Lose!', 'match-lose');
         } else if (gameMode === 'scenario' && activeScenarioStage?.kind === 'lines') {
             failScenarioStage('SYSTEM OVERLOAD');
@@ -1043,7 +1076,7 @@ quitToMenuBtn.addEventListener('click', () => {
 });
 
 function emitMatchEvent(type, payload = {}) {
-    if (gameMode !== 'versus') return;
+    if (!opponentPlayActive()) return;
     matchEventLog.push({type, ...payload});
     if (matchEventLog.length > 20) matchEventLog.shift();
 }
@@ -1067,7 +1100,7 @@ function resetOpponentState() {
     opponent.backToBackActive = false;
     opponent.pendingGarbage = 0;
     opponent.gameOver = false;
-    if (gameMode !== 'versus') return;
+    if (!opponentPlayActive()) return;
     opponent.matrix = createPiece(nextOpponentPieceType());
     opponent.next = createPiece(nextOpponentPieceType());
     opponent.pos = {
@@ -1104,7 +1137,8 @@ function resetGameState() {
     matchEventLog = [];
     scenarioHazardTimer = gameMode === 'scenario'
         ? activeScenarioStage?.hazardIntervalMs || 0 : 0;
-    firewallCharges = 0;
+    firewallCharges = gameMode === 'scenario'
+        ? scenarioUpgradeEffects(scenarioProgress.upgrades).firewallCharges : 0;
     scenarioResolved = false;
     resetOpponentState();
 
@@ -1129,7 +1163,7 @@ function playerHold() {
         player.pos.x = (arena[0].length / 2 | 0) - (player.matrix[0].length / 2 | 0);
         player.lockTimer = 0;
         if (collide(arena, player)) {
-            if (gameMode === 'versus') {
+            if (opponentPlayActive()) {
                 endVersusMatch('You Lose!', 'match-lose');
             } else if (gameMode === 'scenario' && activeScenarioStage?.kind === 'lines') {
                 failScenarioStage('SYSTEM OVERLOAD');
@@ -1218,13 +1252,14 @@ const exposed = {
     readLeaderboard, writeLeaderboard, renderLeaderboard,
     shuffleBag, emitMatchEvent, playerReset, playerHold, playerMove,
     playerRotate, playerDrop, playerHardDrop, lockPiece, lockCurrentPiece,
-    queueGarbageForOpponent, queueGarbageForPlayer, runOpponentTurn,
+    queueGarbageForOpponent, queueGarbageForPlayer, runOpponentTurn, runOpponentTurnsAfterLock,
     checkSprintCompletion, showHighScoreModal, showStartScreen, showPauseScreen, exitApplication,
     togglePause, quitGame, returnToMenu, selectGameMode, canAcceptGameInput, update, formatElapsedTime,
     createScenarioProgress, readScenarioProgress, writeScenarioProgress, renderScenarioMap,
     showScenarioMap, showScenarioBriefing, startScenarioStage, canPlayScenarioStage,
     completeScenarioLineProgress, updateScenarioState, completeScenarioStage,
-    failScenarioStage, leaveScenarioForMap, playerGarbageActive, scenarioUpgradeEffects,
+    failScenarioStage, leaveScenarioForMap, playerGarbageActive, hasScenarioOpponent,
+    opponentPlayActive, scenarioUpgradeEffects,
     themeMelody, themeMelodyName,
     isBgmRunning: isBGMRunning,
     PIECE_TYPES, SPRINT_TARGET_LINES, VERSUS_WIDTH, VERSUS_HEIGHT, MAX_PENDING_GARBAGE,

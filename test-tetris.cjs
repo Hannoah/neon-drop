@@ -1285,6 +1285,237 @@ async function testVersusMode(browser, url) {
   await page.close();
 }
 
+async function testScenarioRivalsAndUpgrades(browser, url) {
+  const { page, pageErrors } = await openPage(browser, url);
+  await page.evaluate(() => {
+    scenarioProgress = {
+      version: 1, unlockedStage: 5, results: {},
+      upgrades: {pulse: 0, cryo: 0, firewall: 0}, pendingRewardStage: null, completed: false,
+    };
+    window.requestAnimationFrame = () => 8181;
+    window.cancelAnimationFrame = () => {};
+  });
+
+  const stage4 = await page.evaluate(() => {
+    const started = startScenarioStage(4);
+    return {
+      started,
+      scenarioOpponent: hasScenarioOpponent(),
+      opponentActive: opponentPlayActive(),
+      opponentReady: Boolean(opponent.matrix && opponent.next),
+      opponentX: opponent.pos.x,
+      expectedX: (VERSUS_WIDTH / 2 | 0) - (opponent.matrix[0].length / 2 | 0),
+      panelVisible: getComputedStyle(document.querySelector('#opponent-panel')).display !== 'none',
+      layoutActive: document.querySelector('#game-container').classList.contains('versus-active'),
+      garbageActive: playerGarbageActive(),
+    };
+  });
+  assert.deepEqual(stage4, {
+    started: true, scenarioOpponent: true, opponentActive: true, opponentReady: true,
+    opponentX: stage4.expectedX, expectedX: stage4.expectedX,
+    panelVisible: true, layoutActive: true, garbageActive: true,
+  }, 'stage 4 must reuse the centered visible opponent board and competitive garbage flow');
+
+  const scenarioQueue = await page.evaluate(() => {
+    matchEventLog = [];
+    opponent.pendingGarbage = 0;
+    queueGarbageForOpponent(2);
+    const scenario = {pending: opponent.pendingGarbage, event: matchEventLog.at(-1)};
+    gameMode = 'marathon';
+    opponent.pendingGarbage = 0;
+    matchEventLog = [];
+    queueGarbageForOpponent(2);
+    return {scenario, marathon: {pending: opponent.pendingGarbage, events: matchEventLog.length}};
+  });
+  assert.deepEqual(scenarioQueue, {
+    scenario: {pending: 2, event: {type: 'attack-sent', from: 'player', amount: 2}},
+    marathon: {pending: 0, events: 0},
+  }, 'scenario rivals must receive and record player attacks while Marathon ignores them');
+
+  const opponentTurns = await page.evaluate(() => {
+    startScenarioStage(4);
+    const stage4Turns = runOpponentTurnsAfterLock();
+    startScenarioStage(5);
+    const stage5Turns = runOpponentTurnsAfterLock();
+    gameMode = 'versus';
+    activeScenarioStage = null;
+    isGameOver = false;
+    resetGameState();
+    const quickTurns = runOpponentTurnsAfterLock();
+    scenarioProgress.unlockedStage = 5;
+    startScenarioStage(5);
+    scenarioResolved = true;
+    const resolvedTurns = runOpponentTurnsAfterLock();
+    scenarioResolved = false;
+    isGameOver = true;
+    const gameOverTurns = runOpponentTurnsAfterLock();
+    isGameOver = false;
+    opponent.gameOver = true;
+    const opponentOverTurns = runOpponentTurnsAfterLock();
+    startScenarioStage(4);
+    opponent.matrix = null;
+    const missingPieceTurns = runOpponentTurnsAfterLock();
+    return {
+      stage4Turns, stage5Turns, quickTurns, resolvedTurns, gameOverTurns,
+      opponentOverTurns, missingPieceTurns,
+    };
+  });
+  assert.deepEqual(opponentTurns, {
+    stage4Turns: 1, stage5Turns: 2, quickTurns: 1,
+    resolvedTurns: 0, gameOverTurns: 0, opponentOverTurns: 0, missingPieceTurns: 0,
+  }, 'post-lock AI turns must follow the mode and stop after any terminal state');
+
+  const scenarioResults = await page.evaluate(() => {
+    startScenarioStage(4);
+    const progressBefore = JSON.stringify(scenarioProgress);
+    endVersusMatch('You Win!', 'match-win');
+    const win = {
+      title: document.querySelector('#scenario-result-title').textContent,
+      opponentGameOver: opponent.gameOver,
+      event: matchEventLog.at(-1)?.type,
+      progressUnchanged: JSON.stringify(scenarioProgress) === progressBefore,
+      stars: document.querySelector('#scenario-result-stars').textContent,
+    };
+    const eventsAfterWin = matchEventLog.length;
+    endVersusMatch('You Lose!', 'match-lose');
+    win.once = matchEventLog.length === eventsAfterWin;
+
+    startScenarioStage(4);
+    endVersusMatch('You Lose!', 'match-lose');
+    const loss = {
+      title: document.querySelector('#scenario-result-title').textContent,
+      scenarioVisible: document.querySelector('#scenario-result-screen').style.display !== 'none',
+      gameOverVisible: document.querySelector('#game-over-screen').style.display !== 'none',
+      highScoreVisible: document.querySelector('#high-score-input-group').offsetParent !== null,
+      event: matchEventLog.at(-1)?.type,
+    };
+    return {win, loss};
+  });
+  assert.deepEqual(scenarioResults, {
+    win: {
+      title: 'STAGE CLEAR', opponentGameOver: true, event: 'match-win',
+      progressUnchanged: true, stars: '', once: true,
+    },
+    loss: {
+      title: 'You Lose!', scenarioVisible: true, gameOverVisible: false,
+      highScoreVisible: false, event: 'match-lose',
+    },
+  }, 'scenario rival results must use the campaign shell without persistence or leaderboard input');
+
+  const pulse = await page.evaluate(() => {
+    scenarioProgress.upgrades = {pulse: 2, cryo: 0, firewall: 0};
+    startScenarioStage(4);
+    player.score = 0;
+    player.level = 1;
+    combo = 0;
+    backToBackActive = false;
+    opponent.pendingGarbage = 0;
+    scoreLines(2, false);
+    const positive = {score: player.score, pending: opponent.pendingGarbage};
+    opponent.pendingGarbage = 0;
+    combo = 0;
+    backToBackActive = false;
+    scoreLines(1, false);
+    const zeroAttack = opponent.pendingGarbage;
+
+    gameMode = 'marathon';
+    activeScenarioStage = null;
+    player.score = 0;
+    player.level = 1;
+    combo = 0;
+    backToBackActive = false;
+    scoreLines(2, false);
+    const marathonScore = player.score;
+
+    gameMode = 'versus';
+    resetGameState();
+    player.score = 0;
+    player.level = 1;
+    combo = 0;
+    backToBackActive = false;
+    opponent.pendingGarbage = 0;
+    scoreLines(2, false);
+    return {positive, zeroAttack, marathonScore, versusScore: player.score, versusAttack: opponent.pendingGarbage};
+  });
+  assert.deepEqual(pulse, {
+    positive: {score: 420, pending: 3}, zeroAttack: 0,
+    marathonScore: 300, versusScore: 300, versusAttack: 1,
+  }, 'Pulse must multiply scenario scoring and boost only positive attacks');
+
+  const firewall = await page.evaluate(() => {
+    scenarioProgress.upgrades = {pulse: 0, cryo: 0, firewall: 2};
+    startScenarioStage(4);
+    const initial = firewallCharges;
+    const before = JSON.stringify(arena);
+    queueGarbageForPlayer(5);
+    playerReset();
+    const first = {
+      charges: firewallCharges, pending: playerPendingGarbage,
+      unchanged: JSON.stringify(arena) === before,
+      event: lastEventMessage, timer: eventMessageTimer,
+      hud: document.querySelector('#player-garbage').textContent,
+    };
+    queueGarbageForPlayer(3);
+    playerReset();
+    const second = {charges: firewallCharges, pending: playerPendingGarbage, unchanged: JSON.stringify(arena) === before};
+    queueGarbageForPlayer(2);
+    playerReset();
+    const third = {
+      charges: firewallCharges, pending: playerPendingGarbage,
+      garbageRows: arena.slice(-2).map(row => row.filter(value => value === 8).length),
+    };
+    startScenarioStage(4);
+    return {initial, first, second, third, retryCharges: firewallCharges};
+  });
+  assert.deepEqual(firewall, {
+    initial: 2,
+    first: {charges: 1, pending: 0, unchanged: true, event: 'FIREWALL BLOCK', timer: 2000, hud: 'YOU INCOMING 00'},
+    second: {charges: 0, pending: 0, unchanged: true},
+    third: {charges: 0, pending: 0, garbageRows: [11, 11]},
+    retryCharges: 2,
+  }, 'Firewall must block whole incoming batches and reset from saved stacks on retry');
+
+  const terminalRouting = await page.evaluate(() => {
+    scenarioProgress.upgrades.firewall = 0;
+    startScenarioStage(4);
+    arena[0][0] = 1;
+    playerPendingGarbage = 1;
+    player.next = createPiece('D');
+    playerReset();
+    const overflow = {
+      title: document.querySelector('#scenario-result-title').textContent,
+      events: matchEventLog.filter(event => event.type === 'match-lose').length,
+    };
+    playerReset();
+    overflow.eventsAfterRepeat = matchEventLog.filter(event => event.type === 'match-lose').length;
+
+    startScenarioStage(4);
+    arena.forEach(row => row.fill(0));
+    player.matrix = createPiece('D');
+    player.hold = createPiece('S');
+    player.canHold = true;
+    player.pos = {x: 4, y: 0};
+    for (let y = 0; y < 4; y++) arena[y][5] = 8;
+    playerHold();
+    const hold = {
+      title: document.querySelector('#scenario-result-title').textContent,
+      events: matchEventLog.filter(event => event.type === 'match-lose').length,
+      scenarioVisible: document.querySelector('#scenario-result-screen').style.display !== 'none',
+      gameOverVisible: document.querySelector('#game-over-screen').style.display !== 'none',
+    };
+    playerHold();
+    hold.eventsAfterRepeat = matchEventLog.filter(event => event.type === 'match-lose').length;
+    return {overflow, hold};
+  });
+  assert.deepEqual(terminalRouting, {
+    overflow: {title: 'SYSTEM OVERLOAD', events: 1, eventsAfterRepeat: 1},
+    hold: {title: 'You Lose!', events: 1, scenarioVisible: true, gameOverVisible: false, eventsAfterRepeat: 1},
+  }, 'scenario rival overflow and Hold top-out must fail once through the scenario result');
+
+  assert.equal(pageErrors.length, 0, 'scenario rivals and upgrades must not throw page errors');
+  await page.close();
+}
+
 async function testUsabilityUI(browser, url) {
   const { page, pageErrors } = await openPage(browser, url);
 
@@ -1356,6 +1587,7 @@ async function testUsabilityUI(browser, url) {
     await testScoreSave(browser, url);
     await testGameplayEnhancements(browser, url);
     await testVersusMode(browser, url);
+    await testScenarioRivalsAndUpgrades(browser, url);
     await testUsabilityUI(browser, url);
     console.log('All Neon Drop tests passed.');
   } finally {
