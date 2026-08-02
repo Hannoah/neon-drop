@@ -598,6 +598,53 @@ async function testScenarioRewards(browser, url) {
   await page.evaluate(() => localStorage.removeItem('neonDropScenario'));
   await page.reload();
 
+  const invalidTimes = await page.evaluate(() => [Infinity, NaN, -1].map(time => {
+    scenarioProgress = createScenarioProgress();
+    writeScenarioProgress();
+    startScenarioStage(1);
+    elapsedTime = time;
+    const resultScreen = document.querySelector('#scenario-result-screen');
+    const rewardButton = document.querySelector('#scenario-reward-open-btn');
+    document.querySelector('#scenario-result-title').textContent = 'SENTINEL TITLE';
+    document.querySelector('#scenario-result-stars').textContent = '☆';
+    document.querySelector('#scenario-result-stars').setAttribute('aria-label', 'sentinel stars');
+    document.querySelector('#scenario-result-detail').textContent = 'SENTINEL DETAIL';
+    resultScreen.style.display = 'none';
+    rewardButton.style.display = 'none';
+    const progress = JSON.stringify(scenarioProgress);
+    const stored = localStorage.getItem('neonDropScenario');
+    const ui = JSON.stringify({
+      title: document.querySelector('#scenario-result-title').textContent,
+      stars: document.querySelector('#scenario-result-stars').textContent,
+      label: document.querySelector('#scenario-result-stars').getAttribute('aria-label'),
+      detail: document.querySelector('#scenario-result-detail').textContent,
+      resultDisplay: resultScreen.style.display,
+      rewardDisplay: rewardButton.style.display,
+    });
+    const completed = completeScenarioStage();
+    return {
+      completed,
+      progressUnchanged: JSON.stringify(scenarioProgress) === progress,
+      storedUnchanged: localStorage.getItem('neonDropScenario') === stored,
+      uiUnchanged: JSON.stringify({
+        title: document.querySelector('#scenario-result-title').textContent,
+        stars: document.querySelector('#scenario-result-stars').textContent,
+        label: document.querySelector('#scenario-result-stars').getAttribute('aria-label'),
+        detail: document.querySelector('#scenario-result-detail').textContent,
+        resultDisplay: resultScreen.style.display,
+        rewardDisplay: rewardButton.style.display,
+      }) === ui,
+      resolved: scenarioResolved,
+    };
+  }));
+  assert.deepEqual(invalidTimes, Array.from({length: 3}, () => ({
+    completed: false,
+    progressUnchanged: true,
+    storedUnchanged: true,
+    uiUnchanged: true,
+    resolved: false,
+  })), 'invalid elapsed times must be rejected before completion mutates state, storage, or result UI');
+
   const firstWin = await page.evaluate(() => {
     startScenarioStage(1);
     elapsedTime = 70000;

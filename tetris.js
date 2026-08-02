@@ -856,7 +856,8 @@ function updateScenarioState(deltaTime) {
 }
 
 function completeScenarioStage() {
-    if (gameMode !== 'scenario' || !activeScenarioStage || scenarioResolved) return false;
+    if (gameMode !== 'scenario' || !activeScenarioStage || scenarioResolved
+        || !Number.isFinite(elapsedTime) || elapsedTime < 0) return false;
     scenarioResolved = true;
     isGameOver = true;
     cancelScheduledUpdate();
