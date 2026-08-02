@@ -408,6 +408,7 @@ async function testScenarioResponsivePolish(browser, url) {
       scrollHeight: document.documentElement.scrollHeight,
       map: {top: map.top, bottom: map.bottom},
       stageTops,
+      routeConnector: getComputedStyle(document.querySelector('#scenario-stage-list')).backgroundImage,
       actions,
       current: document.querySelector('[data-scenario-stage][aria-current="step"]')?.dataset.scenarioStage,
       lockedDisabled: document.querySelector('[data-scenario-stage="2"]')?.disabled,
@@ -419,6 +420,8 @@ async function testScenarioResponsivePolish(browser, url) {
     `campaign map must fit the desktop viewport: ${JSON.stringify(desktop.map)}`);
   assert.ok(Math.max(...desktop.stageTops) - Math.min(...desktop.stageTops) <= 4,
     'all five desktop stages must share one route row');
+  assert.match(desktop.routeConnector, /linear-gradient/,
+    'the campaign stages must have a visible connecting route');
   assert.ok(desktop.actions.every(action => action.visible && action.top >= 0 && action.bottom <= 720),
     `campaign map actions must remain in the viewport: ${JSON.stringify(desktop.actions)}`);
   assert.equal(desktop.current, '1', 'the selected stage must expose aria-current=step');

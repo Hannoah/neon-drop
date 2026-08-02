@@ -273,6 +273,7 @@
             grid-template-columns: repeat(5, minmax(0, 1fr));
             gap: 8px;
             margin: 16px 0;
+            background: linear-gradient(90deg, var(--player), var(--hud-border)) center / calc(100% - 118px) 3px no-repeat;
         }
         .modal #scenario-stage-list button {
             min-height: 92px;
@@ -411,7 +412,10 @@
             .mode-options {
                 grid-template-columns: 1fr;
             }
-            #scenario-stage-list { grid-template-columns: 1fr; }
+            #scenario-stage-list {
+                grid-template-columns: 1fr;
+                background: linear-gradient(180deg, var(--player), var(--hud-border)) center / 3px calc(100% - 92px) no-repeat;
+            }
             .modal .mode-card {
                 min-height: 52px;
                 text-align: left;
