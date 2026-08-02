@@ -216,9 +216,16 @@ async function testCampaignMenuExit(browser, url) {
   assert.equal(await page.locator('#exit-screen').isVisible(), false,
     'cancelling application exit must not reveal the fallback screen');
 
+  await page.evaluate(() => {
+    window.__cancelledFrames = [];
+    window.requestAnimationFrame = () => 4242;
+    window.cancelAnimationFrame = id => window.__cancelledFrames.push(id);
+  });
   await page.getByRole('button', { name: 'Start Game' }).click();
   assert.equal(await page.evaluate(() => isBgmRunning()), true,
-    'safe exit must stop a running BGM');
+    'active gameplay must have running BGM before exit');
+  assert.equal(await page.evaluate(() => animationFrameId), 4242,
+    'active gameplay must retain the scheduled animation frame ID before exit');
   await page.evaluate(() => {
     window.confirm = () => true;
     window.__closeCount = 0;
@@ -229,10 +236,11 @@ async function testCampaignMenuExit(browser, url) {
 
   assert.deepEqual(await page.evaluate(() => ({
     closeCount: window.__closeCount,
+    cancelledFrames: window.__cancelledFrames,
     animationFrameId,
     bgmRunning: isBgmRunning(),
     focused: document.activeElement?.id,
-  })), { closeCount: 1, animationFrameId: null, bgmRunning: false, focused: 'exit-return-btn' },
+  })), { closeCount: 1, cancelledFrames: [4242], animationFrameId: null, bgmRunning: false, focused: 'exit-return-btn' },
   'safe exit must stop gameplay and focus the fallback action');
 
   await page.locator('#exit-return-btn').click();
