@@ -362,9 +362,8 @@ async function testScenarioLineStages(browser, url) {
     stage: activeScenarioStage?.id,
     objective: document.querySelector('#scenario-objective')?.textContent,
     objectiveVisible: document.querySelector('#scenario-objective')?.hidden === false,
-    ratingLabel: document.querySelector('#scenario-result-stars')?.getAttribute('aria-label'),
   })), {
-    stage: 1, objective: 'OBJECTIVE 0 / 8', objectiveVisible: true, ratingLabel: 'Stage rating',
+    stage: 1, objective: 'OBJECTIVE 0 / 8', objectiveVisible: true,
   },
   'stage 1 must start through briefing with a visible line objective');
 
@@ -387,6 +386,8 @@ async function testScenarioLineStages(browser, url) {
     firstCompletion: true, repeatedCompletion: false, completionUnchanged: true,
     firstFailure: true, repeatedFailure: false, failureTitle: 'FIRST FAILURE',
   }, 'scenario result functions must resolve once and reject later rewrites');
+  assert.equal(await page.getByRole('img', {name: '0 of 3 stars'}).count(), 1,
+    'the empty Task 4 rating must have accessible image semantics');
   await page.locator('#scenario-retry-btn').click();
 
   const progressBefore = await page.evaluate(() => JSON.stringify(scenarioProgress));
@@ -490,8 +491,8 @@ async function testScenarioLineStages(browser, url) {
     updateScenarioState(1000);
     const paused = {timer: scenarioHazardTimer, pending: playerPendingGarbage};
     isPaused = false;
-    scenarioHazardTimer = 1;
-    updateScenarioState(1);
+    scenarioHazardTimer = 1000;
+    updateScenarioState(1250);
     const queued = {
       timer: scenarioHazardTimer,
       pending: playerPendingGarbage,
@@ -504,11 +505,15 @@ async function testScenarioLineStages(browser, url) {
       pending: playerPendingGarbage,
       garbageLines: arena.slice(-1)[0].filter(value => value === 8).length,
     };
+    startScenarioStage(3);
+    scenarioHazardTimer = 1000;
+    updateScenarioState(90000);
+    const hugeDelta = {timer: scenarioHazardTimer, pending: playerPendingGarbage};
     gameMode = 'marathon';
     playerPendingGarbage = 0;
     queueGarbageForPlayer(1);
     return {
-      interval, createdByUpdate, decayedByNextUpdate, paused, queued, applied,
+      interval, createdByUpdate, decayedByNextUpdate, paused, queued, applied, hugeDelta,
       marathonPending: playerPendingGarbage,
     };
   });
@@ -517,8 +522,9 @@ async function testScenarioLineStages(browser, url) {
     createdByUpdate: {event: 'INTERFERENCE +1', timer: 2000},
     decayedByNextUpdate: {event: 'INTERFERENCE +1', timer: 1500},
     paused: {timer: 30000, pending: 0},
-    queued: {timer: 30000, pending: 1, event: 'INTERFERENCE +1', eventTimer: 2000},
+    queued: {timer: 29750, pending: 1, event: 'INTERFERENCE +1', eventTimer: 2000},
     applied: {pending: 0, garbageLines: 11},
+    hugeDelta: {timer: -59000, pending: 1},
     marathonPending: 0,
   }, 'stage 3 interference must queue once, pause cleanly, and apply between pieces');
 

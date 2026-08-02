@@ -806,7 +806,7 @@ function updateScenarioState(deltaTime) {
     scenarioHazardTimer -= deltaTime;
     if (scenarioHazardTimer <= 0) {
         queueGarbageForPlayer(1);
-        scenarioHazardTimer = activeScenarioStage.hazardIntervalMs;
+        scenarioHazardTimer += activeScenarioStage.hazardIntervalMs;
         lastEventMessage = 'INTERFERENCE +1';
         eventMessageTimer = 2000;
         updateScore();
