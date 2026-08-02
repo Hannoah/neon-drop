@@ -67,7 +67,7 @@ export function normalizeScenarioProgress(value) {
     const spentRewards = Object.values(progress.upgrades).reduce((sum, stack) => sum + stack, 0);
     progress.pendingRewardStage = Number.isInteger(pending) && pending >= 1 && pending <= 4
         && !progress.completed && progress.unlockedStage >= pending + 1 && Boolean(progress.results[pending])
-        && spentRewards === earnedRewards - 1 && Object.values(progress.upgrades).some(stack => stack < 4)
+        && spentRewards === earnedRewards - 1
         ? pending : null;
     return progress;
 }
