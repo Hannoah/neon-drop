@@ -412,6 +412,7 @@ async function testScenarioResponsivePolish(browser, url) {
       actions,
       current: document.querySelector('[data-scenario-stage][aria-current="step"]')?.dataset.scenarioStage,
       lockedDisabled: document.querySelector('[data-scenario-stage="2"]')?.disabled,
+      lockedOpacity: getComputedStyle(document.querySelector('[data-scenario-stage="2"]')).opacity,
     };
   });
   assert.ok(desktop.scrollWidth <= 1280 && desktop.scrollHeight <= 720,
@@ -426,6 +427,7 @@ async function testScenarioResponsivePolish(browser, url) {
     `campaign map actions must remain in the viewport: ${JSON.stringify(desktop.actions)}`);
   assert.equal(desktop.current, '1', 'the selected stage must expose aria-current=step');
   assert.equal(desktop.lockedDisabled, true, 'locked stages must remain natively disabled');
+  assert.equal(desktop.lockedOpacity, '1', 'locked stage backgrounds must hide the connector line');
 
   await page.locator('[data-scenario-stage="1"]').focus();
   assert.notEqual(await page.locator('[data-scenario-stage="1"]').evaluate(element =>
