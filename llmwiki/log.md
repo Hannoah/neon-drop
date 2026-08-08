@@ -22,3 +22,11 @@
 - 데스크톱 맵과 OVERLORD 경기 화면, 모바일 스크롤·접근성·reduced-motion 동작을 검증했다.
 - `npm test`에서 Node 테스트 56개와 브라우저 회귀 테스트 전체가 통과했다.
 - 상세 내용: [[neon-circuit-scenario-2026-08-02]]
+
+## 2026-08-08
+
+- Guideline 코어 업그레이드(Wave A)를 문서화하고 Playwright 수용 테스트를 보강했다.
+- Next 5, 소프트 드롭 홀드, Settings 리바인드·타이밍 유지, 포커스 트랩/Escape, 레거시 리더보드 wipe, `?test=1` 게이트를 회귀에 포함했다.
+- README에 Guideline 조작, Settings, Next 5, T-Spin/PC, 리더보드 generation, Pulse Amp positive attack, DAS/ARR·소프트 드롭 홀드를 반영했다.
+- `npm test`: Node 유닛 테스트 101개 통과, Playwright 브라우저 회귀 전체 통과.
+- 상세 내용: [[guideline-core-2026-08-08]]

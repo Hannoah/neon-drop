@@ -168,6 +168,33 @@ async function testSettingsEscapeClose(browser, url) {
     focused: 'settings-back-btn',
   }, 'Settings must open from the start menu');
 
+  const focusables = await page.evaluate(() => [...modalOverlay.querySelectorAll(
+    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+  )].filter(node => !node.disabled && node.offsetParent !== null).map(node => node.id || node.dataset.rebind || node.value));
+  assert.ok(focusables.length >= 2, 'Settings must expose multiple focusable controls');
+  assert.equal(focusables[focusables.length - 1], 'settings-back-btn',
+    'Back must be the last focusable control in Settings');
+
+  await page.keyboard.press('Tab');
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.id || document.activeElement?.dataset.rebind),
+    focusables[0],
+    'Tab from the last Settings control must wrap to the first',
+  );
+
+  await page.evaluate(() => {
+    const nodes = [...modalOverlay.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    )].filter(node => !node.disabled && node.offsetParent !== null);
+    nodes[0].focus();
+  });
+  await page.keyboard.press('Shift+Tab');
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.id),
+    'settings-back-btn',
+    'Shift+Tab from the first Settings control must wrap to Back',
+  );
+
   await page.keyboard.press('Escape');
   assert.deepEqual(await page.evaluate(() => ({
     settingsVisible: getComputedStyle(settingsScreen).display !== 'none',
@@ -1672,6 +1699,35 @@ async function testLeaderboardSafety(browser, url) {
 
   await page.evaluate(() => localStorage.setItem(
     'tetrisLeaderboard',
+    JSON.stringify([{ name: 'LEGACY', score: 99999 }]),
+  ));
+  await page.reload();
+  assert.equal(await page.locator('#leaderboard').textContent(), 'No records yet',
+    'legacy array leaderboards must be wiped');
+  assert.deepEqual(
+    await page.evaluate(() => JSON.parse(localStorage.getItem('tetrisLeaderboard'))),
+    { generation: 2, scores: [] },
+    'legacy array leaderboards must be rewritten with the current generation',
+  );
+
+  await page.evaluate(() => localStorage.setItem(
+    'tetrisLeaderboard',
+    JSON.stringify({
+      generation: 0,
+      scores: [{ name: 'OLDGEN', score: 42 }],
+    }),
+  ));
+  await page.reload();
+  assert.equal(await page.locator('#leaderboard').textContent(), 'No records yet',
+    'foreign generation leaderboards must be wiped');
+  assert.deepEqual(
+    await page.evaluate(() => JSON.parse(localStorage.getItem('tetrisLeaderboard'))),
+    { generation: 2, scores: [] },
+    'foreign generation leaderboards must be rewritten empty at generation 2',
+  );
+
+  await page.evaluate(() => localStorage.setItem(
+    'tetrisLeaderboard',
     JSON.stringify({
       generation: 2,
       scores: [{ name: '<b>name</b>', score: 100 }],
@@ -2222,6 +2278,130 @@ async function testScenarioRivalsAndUpgrades(browser, url) {
   await page.close();
 }
 
+async function testNextFivePreview(browser, url) {
+  const { page, pageErrors } = await openPage(browser, url);
+  await page.getByRole('button', { name: 'Start Game' }).click();
+
+  const preview = await page.evaluate(() => {
+    const types = pieceQueue.preview(5);
+    const canvas = document.getElementById('next');
+    const panel = document.querySelector('.panel-box--next');
+    return {
+      count: types.length,
+      types,
+      height: canvas.height,
+      width: canvas.width,
+      visible: canvas.offsetParent !== null,
+      label: panel?.querySelector('h3, .panel-title, span')?.textContent?.trim() || panel?.textContent?.trim()?.slice(0, 24),
+    };
+  });
+  assert.equal(preview.count, 5, 'Next queue must expose five upcoming pieces');
+  assert.equal(preview.types.length, 5, 'Next 5 preview data must contain five piece types');
+  assert.equal(preview.height, 400, 'Next canvas must be tall enough for a five-piece stack');
+  assert.equal(preview.width, 80, 'Next canvas width must remain the preview rail size');
+  assert.equal(preview.visible, true, 'Next canvas must be visible during play');
+  assert.equal(pageErrors.length, 0, 'Next 5 preview must not throw');
+  await page.close();
+}
+
+async function testSoftDropHoldPath(browser, url) {
+  const { page, pageErrors } = await openPage(browser, url);
+  await page.getByRole('button', { name: 'Start Game' }).click();
+
+  await page.evaluate(() => {
+    arena.forEach(row => row.fill(0));
+    player.matrix = createPiece('D');
+    player.pos = { x: 4, y: 0 };
+    player.score = 0;
+    dropInterval = 1000;
+    inputController.reset();
+  });
+
+  await page.keyboard.down('ArrowDown');
+  const held = await page.evaluate(() => {
+    const holding = inputController.isSoftDropping();
+    const beforeY = player.pos.y;
+    const beforeScore = player.score;
+    playerDrop(inputController.isSoftDropping());
+    return {
+      holding,
+      advanced: player.pos.y === beforeY + 1,
+      scoreDelta: player.score - beforeScore,
+      softDropPoint: SOFT_DROP_POINT,
+    };
+  });
+  await page.keyboard.up('ArrowDown');
+
+  assert.equal(held.holding, true, 'holding soft drop must arm the input controller');
+  assert.equal(held.advanced, true, 'soft-drop hold path must advance the piece one cell');
+  assert.equal(held.scoreDelta, held.softDropPoint,
+    'soft-drop hold path must award soft-drop points per cell');
+  assert.equal(
+    await page.evaluate(() => inputController.isSoftDropping()),
+    false,
+    'releasing soft drop must clear the hold flag',
+  );
+  assert.equal(pageErrors.length, 0, 'soft-drop hold path must not throw');
+  await page.close();
+}
+
+async function testSettingsPersistence(browser, url) {
+  const { page, pageErrors } = await openPage(browser, url);
+
+  await page.locator('#menu-settings-btn').click();
+  await page.locator('#preset-guideline').check();
+  await page.locator('#settings-das').fill('222');
+  await page.locator('#settings-arr').fill('11');
+  await page.locator('#settings-lock-delay').fill('750');
+  await page.locator('[data-rebind="hardDrop"]').click();
+  await page.keyboard.press('KeyH');
+
+  const beforeReload = await page.evaluate(() => ({
+    das: document.getElementById('settings-das').value,
+    arr: document.getElementById('settings-arr').value,
+    lockDelay: document.getElementById('settings-lock-delay').value,
+    hardDrop: settings.bindings.hardDrop,
+    preset: settings.preset,
+    stored: JSON.parse(localStorage.getItem('neonDropPreferences')),
+  }));
+  assert.deepEqual(beforeReload.hardDrop, ['KeyH'], 'rebind must assign the captured key');
+  assert.equal(beforeReload.preset, 'custom', 'editing a binding must mark the preset as custom');
+  assert.equal(beforeReload.das, '222');
+  assert.equal(beforeReload.arr, '11');
+  assert.equal(beforeReload.lockDelay, '750');
+  assert.equal(beforeReload.stored.timing.das, 222);
+  assert.equal(beforeReload.stored.timing.arr, 11);
+  assert.equal(beforeReload.stored.timing.lockDelay, 750);
+
+  await page.reload();
+  await page.locator('#menu-settings-btn').click();
+  const restored = await page.evaluate(() => ({
+    das: document.getElementById('settings-das').value,
+    arr: document.getElementById('settings-arr').value,
+    lockDelay: document.getElementById('settings-lock-delay').value,
+    dasLabel: document.getElementById('settings-das-value').textContent,
+    hardDrop: settings.bindings.hardDrop,
+    hardDropButton: document.querySelector('[data-rebind="hardDrop"]')?.textContent,
+    preset: settings.preset,
+    rotateCW: settings.bindings.rotateCW,
+    liveDas: settings.timing.das,
+  }));
+  assert.deepEqual(restored, {
+    das: '222',
+    arr: '11',
+    lockDelay: '750',
+    dasLabel: '222',
+    hardDrop: ['KeyH'],
+    hardDropButton: 'KeyH',
+    preset: 'custom',
+    rotateCW: ['KeyX', 'ArrowUp'],
+    liveDas: 222,
+  }, 'settings rebind and timing must persist across reload');
+
+  assert.equal(pageErrors.length, 0, 'settings persistence must not throw');
+  await page.close();
+}
+
 async function testUsabilityUI(browser, url) {
   const { page, pageErrors } = await openPage(browser, url);
 
@@ -2298,6 +2478,7 @@ async function testUsabilityUI(browser, url) {
     await testShortLandscapeMenu(browser, url);
     await testModalAccessibility(browser, url);
     await testSettingsEscapeClose(browser, url);
+    await testSettingsPersistence(browser, url);
     await testPreferencePersistence(browser, url);
     await testScenarioMap(browser, url);
     await testScenarioMapNavigation(browser, url);
@@ -2313,6 +2494,8 @@ async function testUsabilityUI(browser, url) {
     await testLeaderboardSafety(browser, url);
     await testScoreSave(browser, url);
     await testGameplayEnhancements(browser, url);
+    await testNextFivePreview(browser, url);
+    await testSoftDropHoldPath(browser, url);
     await testVersusMode(browser, url);
     await testScenarioRivalsAndUpgrades(browser, url);
     await testUsabilityUI(browser, url);
