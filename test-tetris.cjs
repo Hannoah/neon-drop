@@ -12,7 +12,8 @@ const mimeTypes = {
 
 function createServer() {
   return http.createServer((request, response) => {
-    const pathname = request.url === '/' ? '/index.html' : request.url;
+    const rawPath = (request.url || '/').split('?')[0];
+    const pathname = rawPath === '/' ? '/index.html' : rawPath;
     const filePath = path.join(root, pathname);
 
     if (!filePath.startsWith(root) || !fs.existsSync(filePath)) {
@@ -182,6 +183,26 @@ async function testSettingsEscapeClose(browser, url) {
 
   assert.equal(pageErrors.length, 0, 'settings open/close must not throw');
   await page.close();
+}
+
+async function testWindowHooksGated(browser, productionUrl, testUrl) {
+  const { page: productionPage, pageErrors: productionErrors } = await openPage(browser, productionUrl);
+  assert.equal(
+    await productionPage.evaluate(() => window.scoreLines),
+    undefined,
+    'production page must not expose Playwright hooks on window',
+  );
+  assert.equal(productionErrors.length, 0, 'production page must not throw');
+  await productionPage.close();
+
+  const { page: testPage, pageErrors: testErrors } = await openPage(browser, testUrl);
+  assert.equal(
+    await testPage.evaluate(() => typeof window.scoreLines),
+    'function',
+    'test page must expose Playwright hooks when ?test=1 is present',
+  );
+  assert.equal(testErrors.length, 0, 'test page must not throw');
+  await testPage.close();
 }
 
 async function testScenarioMap(browser, url) {
@@ -2266,8 +2287,10 @@ async function testUsabilityUI(browser, url) {
   try {
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const { port } = server.address();
-    const url = `http://127.0.0.1:${port}/index.html`;
+    const productionUrl = `http://127.0.0.1:${port}/index.html`;
+    const url = `${productionUrl}?test=1`;
 
+    await testWindowHooksGated(browser, productionUrl, url);
     await testInputGuards(browser, url);
     await testKeyboardModeStart(browser, url);
     await testCampaignMenuExit(browser, url);

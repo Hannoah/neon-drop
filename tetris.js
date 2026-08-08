@@ -1729,11 +1729,14 @@ const liveState = {
     lastActionWasRotate: [() => lastActionWasRotate, (v) => { lastActionWasRotate = v; }],
 };
 
-for (const [name, value] of Object.entries(exposed)) {
-    window[name] = value;
-}
-for (const [name, [getter, setter]] of Object.entries(liveState)) {
-    Object.defineProperty(window, name, { get: getter, set: setter, configurable: true });
+const testMode = new URLSearchParams(location.search).has('test');
+if (testMode) {
+    for (const [name, value] of Object.entries(exposed)) {
+        window[name] = value;
+    }
+    for (const [name, [getter, setter]] of Object.entries(liveState)) {
+        Object.defineProperty(window, name, { get: getter, set: setter, configurable: true });
+    }
 }
 
 //Initialize Game
