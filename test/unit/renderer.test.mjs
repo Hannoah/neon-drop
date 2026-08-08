@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createMatrix } from '../../src/js/board.js';
-import { createRenderer } from '../../src/js/renderer.js';
+import { createRenderer, expireFlashingLines } from '../../src/js/renderer.js';
 
 function fakeContext() {
     return {
@@ -94,4 +94,13 @@ test('renderer draws an active opponent without depending on game mode', () => {
     renderer.drawOpponent();
 
     assert.ok(opponentContext.fillRectCount > 1, 'the opponent piece should be drawn after the clear');
+});
+
+test('expireFlashingLines removes every expired entry in one pass', () => {
+    const lines = [
+        {y: 1, time: 0},
+        {y: 2, time: 0},
+        {y: 3, time: 50},
+    ];
+    assert.deepEqual(expireFlashingLines(lines, 16), [{y: 3, time: 34}]);
 });

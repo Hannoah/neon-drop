@@ -1,6 +1,11 @@
 import { PIECE_COLORS } from './constants.js';
 import { collide } from './board.js';
 
+export function expireFlashingLines(flashingLines, delta = 16) {
+    for (const line of flashingLines) line.time -= delta;
+    return flashingLines.filter(line => line.time > 0);
+}
+
 export function drawMatrix(matrix, offset, ctx) {
     matrix.forEach((row, y) => {
         row.forEach((value, x) => {
@@ -52,12 +57,13 @@ export function createRenderer({
         drawMatrix(arena, {x: 0, y: 0}, context);
         drawMatrix(player.matrix, player.pos, context);
 
-        flashingLines.forEach((line, index) => {
+        const nextFlash = expireFlashingLines(flashingLines, 16);
+        flashingLines.length = 0;
+        flashingLines.push(...nextFlash);
+        for (const line of flashingLines) {
             context.fillStyle = 'rgba(255, 255, 255, 0.8)';
             context.fillRect(0, line.y, 12, 1);
-            line.time -= 16;
-            if (line.time <= 0) flashingLines.splice(index, 1);
-        });
+        }
 
         if (combo > 1) {
             context.fillStyle = '#f1c40f';
