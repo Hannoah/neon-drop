@@ -1665,6 +1665,32 @@ async function testGameplayEnhancements(browser, url) {
     return shakeTime;
   });
   assert.equal(hardDropShake, 0, 'placing one block must not shake the board');
+
+  const softDropRotate = await page.evaluate(() => {
+    arena.forEach(row => row.fill(0));
+    player.matrix = createPiece('A');
+    player.pos = {x: 4, y: 0};
+    while (true) {
+      const y = player.pos.y;
+      playerDrop(false);
+      if (player.pos.y === y) break;
+    }
+    lastActionWasRotate = true;
+    const groundedY = player.pos.y;
+    playerDrop(true);
+    const preservedOnGround = lastActionWasRotate === true && player.pos.y === groundedY;
+
+    player.pos.y = 0;
+    lastActionWasRotate = true;
+    playerDrop(true);
+    const clearedOnAdvance = lastActionWasRotate === false && player.pos.y === 1;
+    return {preservedOnGround, clearedOnAdvance};
+  });
+  assert.equal(softDropRotate.preservedOnGround, true,
+    'grounded soft drop must preserve lastActionWasRotate for T-Spin');
+  assert.equal(softDropRotate.clearedOnAdvance, true,
+    'successful soft drop must clear lastActionWasRotate');
+
   await page.evaluate(() => returnToMenu());
 
   assert.equal(await page.locator('#game-mode').count(), 1, 'the start screen must expose a game mode selector');
@@ -2172,6 +2198,22 @@ async function testUsabilityUI(browser, url) {
   await page.locator('#touch-left').click();
   const after = await page.evaluate(() => ({ ...player.pos }));
   assert.equal(after.x, before.x - 1, 'touch controls must use the same movement as keyboard input');
+
+  const dasStartX = await page.evaluate(() => {
+    settings.timing.das = 50;
+    settings.timing.arr = 0;
+    inputController.setTiming(settings.timing);
+    inputController.reset();
+    player.pos.x = 5;
+    return player.pos.x;
+  });
+  const touchLeft = page.locator('#touch-left');
+  await touchLeft.dispatchEvent('pointerdown', {pointerId: 1, buttons: 1});
+  await page.waitForFunction(() => player.pos.x <= 2, null, {timeout: 1000});
+  await touchLeft.dispatchEvent('pointerup', {pointerId: 1});
+  const dasEndX = await page.evaluate(() => player.pos.x);
+  assert.ok(dasEndX < dasStartX - 1, 'touch left must use DAS/ARR while held, not a one-shot click');
+
   assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('#game-container')).zoom), '1',
     'mobile layout must not depend on CSS zoom');
 

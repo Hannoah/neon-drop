@@ -139,9 +139,7 @@ const modeCards = [...document.querySelectorAll('[data-mode-card]')];
 const PREFERENCES_KEY = 'neonDropPreferences';
 const SCENARIO_KEY = 'neonDropScenario';
 const touchActions = {
-    'touch-left': () => playerMove(-1),
     'touch-rotate': () => playerRotate(1),
-    'touch-right': () => playerMove(1),
     'touch-drop': () => playerHardDrop(),
     'touch-hold': () => playerHold(),
 };
@@ -619,13 +617,13 @@ function arenaSweep(tSpinOrPivot = 'none') {
 }
 
 function playerDrop(manual = false) {
-    if (manual) lastActionWasRotate = false;
     player.pos.y++;
     if (collide(arena, player)) {
         player.pos.y--;
         lockState = onGroundContact(lockState);
         player.lockTimer = lockState.timer;
     } else {
+        if (manual) lastActionWasRotate = false;
         lockState = clearLock(lockState);
         player.lockTimer = 0;
         if (manual) player.score += SOFT_DROP_POINT;
@@ -1230,6 +1228,22 @@ Object.entries(touchActions).forEach(([id, action]) => {
     });
 });
 
+function bindTouchHorizontal(id, action) {
+    const button = document.getElementById(id);
+    const release = () => inputController.release(action);
+    button.addEventListener('pointerdown', event => {
+        event.preventDefault();
+        button.setPointerCapture(event.pointerId);
+        if (canAcceptGameInput()) inputController.press(action, emitHorizontal);
+    });
+    button.addEventListener('pointerup', release);
+    button.addEventListener('pointercancel', release);
+    button.addEventListener('lostpointercapture', release);
+}
+
+bindTouchHorizontal('touch-left', 'moveLeft');
+bindTouchHorizontal('touch-right', 'moveRight');
+
 const touchSoftDrop = document.getElementById('touch-down');
 const releaseTouchSoftDrop = () => inputController.release('softDrop');
 touchSoftDrop.addEventListener('pointerdown', event => {
@@ -1516,6 +1530,7 @@ const liveState = {
     eventMessageTimer: [() => eventMessageTimer, (v) => { eventMessageTimer = v; }],
     lockState: [() => lockState, (v) => { lockState = v; }],
     settings: [() => settings, (v) => { settings = v; }],
+    lastActionWasRotate: [() => lastActionWasRotate, (v) => { lastActionWasRotate = v; }],
 };
 
 for (const [name, value] of Object.entries(exposed)) {
