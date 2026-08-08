@@ -5,216 +5,59 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="data:,">
     <title>Neon Drop</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --bg: #0e1014;
+            --panel: #161a22;
+            --border: #2a2f3a;
+            --text: #f5f7fa;
+            --muted: #8b93a7;
+            --accent: #5eead4;
+            --danger: #f2d14f;
+            --rival: #ff6b8a;
+            --player: var(--accent);
+            --hud-bg: var(--bg);
+            --hud-surface: var(--panel);
+            --hud-panel: var(--panel);
+            --hud-border: var(--border);
+            --hud-muted: var(--muted);
+        }
+
+        * { box-sizing: border-box; }
+
         body {
-            background: radial-gradient(circle, #2c3e50 0%, #000000 100%);
-            color: #fff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            min-height: 100vh;
+            height: 100vh;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100vh;
-            margin: 0;
-            overflow: hidden;
-        }
-        #game-container {
-            position: relative;
-            display: flex;
-            align-items: flex-start;
-            gap: 20px;
-            padding: 15px;
-            border-radius: 12px;
-            background: rgba(20, 30, 40, 0.8);
-            box-shadow: 0 0 40px rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(10px);
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            transform: none;
+            background:
+                radial-gradient(ellipse at 50% 0%, rgba(94, 234, 212, 0.06), transparent 45%),
+                linear-gradient(180deg, #12151c 0%, var(--bg) 48%, #0a0c10 100%);
+            color: var(--text);
+            font-family: "DM Sans", sans-serif;
+            font-optical-sizing: auto;
         }
 
-        canvas {
-            border: 4px solid #444;
-            background-color: #000;
-            box-shadow: inset 0 0 20px rgba(0,0,0,1);
-        }
-        #game-container:not(.versus-active) > #tetris {
-            width: auto;
-            height: min(632px, calc(100vh - 64px));
-        }
-        #opponent-panel {
-            width: 240px;
-            align-self: flex-start;
-            text-align: center;
-            color: #8fd3ff;
-        }
-        #opponent-board {
-            display: block;
-            width: 240px;
-            height: 400px;
-            border-color: #3498db;
-            margin: 0 auto 10px;
-        }
-        .opponent-status {
-            color: #aaa;
-            font-size: 12px;
-            line-height: 1.6;
-        }
-        #side-panel {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            align-content: start;
-            width: 336px;
-            gap: 8px;
-        }
-        #game-container.versus-active {
-            display: grid;
-            grid-template-columns: repeat(2, 248px);
-            grid-template-areas:
-                "opponent player"
-                "side side";
-            justify-content: center;
-            align-items: start;
-            width: 516px;
-            gap: 12px 20px;
-        }
-        #game-container.versus-active #opponent-panel {
-            grid-area: opponent;
-            width: 248px;
-        }
-        #game-container.versus-active #opponent-panel .panel-label {
-            display: none;
-        }
-        #game-container.versus-active > #tetris {
-            grid-area: player;
-            width: 240px;
-            height: 400px;
-        }
-        #game-container.versus-active #side-panel {
-            grid-area: side;
-            width: 516px;
-        }
-        #game-container:not(.versus-active) #side-panel {
-            max-height: min(632px, calc(100vh - 64px));
-            overflow-y: auto;
-        }
-        .panel-box {
-            background: linear-gradient(145deg, rgba(30, 30, 40, 0.9), rgba(20, 20, 30, 0.9));
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 15px;
-            text-align: center;
-            margin-bottom: 0;
-            box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.3);
-        }
-        .btn-exit {
-            background: #e74c3c;
-            color: white;
-            border: none;
-            padding: 10px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background 0.2s;
-            width: 100%;
-        }
-        .btn-exit:hover {
-            background: #c0392b;
-        }
-        .panel-label {
-            font-size: 14px;
-            color: #aaa;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-        }
-        #next-canvas {
-            background-color: #000;
-            border: none;
-        }
-        #score {
-            font-size: 32px;
-            font-weight: bold;
-            margin-bottom: 20px;
-            text-shadow: 0 0 10px rgba(255,255,255,0.5);
-            letter-spacing: 2px;
-        }
-        #modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(5px);
-            justify-content: center;
-            align-items: center;
-            z-index: 100;
-        }
-        .modal {
-            background: #2c3e50;
-            padding: 30px;
-            border-radius: 15px;
-            border: 2px solid #f1c40f;
-            text-align: center;
-            box-shadow: 0 0 30px rgba(241, 196, 15, 0.3);
-            min-width: 300px;
-            animation: modalAppear 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-        @keyframes modalAppear {
-            from { transform: scale(0.8); opacity: 0; }
-            to { transform: scale(1); opacity: 1; }
-        }
-        .modal h2 {
-            margin-top: 0;
-            color: #f1c40f;
-        }
-        .modal input {
-            padding: 10px;
-            font-size: 18px;
-            border-radius: 5px;
-            border: none;
-            margin: 20px 0;
-            width: 80%;
-            text-align: center;
-        }
-        .modal select {
-            padding: 10px;
-            font-size: 16px;
-            border-radius: 5px;
-            border: none;
-            margin: 10px 0 20px;
-            min-width: 180px;
-            text-align: center;
-        }
-        .modal button {
-            background: #f1c40f;
-            color: #000;
-            border: none;
-            padding: 10px 20px;
-            font-weight: bold;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        .modal button:hover {
-            background: #d4ac0d;
-        }
         button, select, summary, input {
             font: inherit;
         }
+
         button:focus-visible, select:focus-visible, summary:focus-visible, input:focus-visible {
-            outline: 3px solid var(--player);
-            outline-offset: 3px;
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
         }
+
         #menu-exit-btn:focus-visible, #exit-game-btn:focus-visible, .btn-exit:focus-visible {
             outline-color: var(--rival);
         }
-        .mode-options {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 8px;
-            margin: 12px 0 16px;
-        }
+
         .visually-hidden {
             position: absolute;
             width: 1px;
@@ -226,591 +69,973 @@
             white-space: nowrap;
             border: 0;
         }
-        .modal .mode-card {
-            min-height: 74px;
-            padding: 10px 8px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            background: rgba(10, 18, 28, 0.65);
-            color: #fff;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 700;
-            line-height: 1.25;
-        }
-        .modal .mode-card span {
-            display: block;
-            margin-top: 5px;
-            color: #b7c4cf;
-            font-size: 11px;
-            font-weight: 400;
-        }
-        .modal .mode-card[aria-pressed="true"] {
-            border-color: #f1c40f;
-            background: rgba(241, 196, 15, 0.16);
-            box-shadow: inset 0 0 0 1px rgba(241, 196, 15, 0.45);
-        }
-        .modal .campaign-card {
-            display: block;
-            width: 100%;
-            margin: 14px 0 12px;
-            padding: 16px;
-            border: 1px solid var(--player);
-            border-radius: 10px;
-            background: linear-gradient(135deg, rgba(36, 216, 255, 0.2), rgba(17, 29, 45, 0.96));
-            color: #f6fbff;
-            box-shadow: inset 0 0 24px rgba(36, 216, 255, 0.1);
-        }
-        .campaign-card span, .campaign-card strong, .campaign-card small { display: block; }
-        .campaign-card span { color: var(--player); font-size: 11px; letter-spacing: 0.16em; }
-        .campaign-card strong { margin: 5px 0; font-size: 20px; letter-spacing: 0.08em; }
-        .campaign-card small { color: var(--hud-muted); font-size: 11px; }
-        .menu-secondary-actions { display: flex; gap: 8px; justify-content: center; }
-        .modal .menu-secondary-actions button { flex: 1; }
-        #settings-screen {
-            width: min(calc(100% - 32px), 420px);
-            max-height: min(90vh, 720px);
-            overflow-y: auto;
-            text-align: left;
-        }
-        #settings-screen h2 { text-align: center; }
-        #settings-screen fieldset {
-            margin: 0 0 14px;
-            padding: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.18);
-            border-radius: 8px;
-        }
-        #settings-screen legend {
-            color: #f1c40f;
-            font-size: 12px;
-            letter-spacing: 0.12em;
-            padding: 0 6px;
-        }
-        .settings-presets {
-            display: flex;
-            gap: 16px;
-            justify-content: center;
-            color: #d6e7f5;
-            font-size: 14px;
-        }
-        .settings-presets label { cursor: pointer; }
-        .settings-bindings {
-            display: grid;
-            gap: 8px;
-            margin: 0 0 14px;
-        }
-        .settings-binding-row {
-            display: grid;
-            grid-template-columns: 1fr minmax(120px, 1.2fr);
-            gap: 8px;
-            align-items: center;
-        }
-        .settings-binding-row span {
-            color: #c4ced7;
-            font-size: 13px;
-        }
-        .modal .settings-binding-row button {
-            width: 100%;
-            padding: 8px 10px;
-            font-size: 13px;
-            background: rgba(10, 18, 28, 0.85);
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        .modal .settings-binding-row button:hover {
-            background: rgba(241, 196, 15, 0.16);
-            border-color: #f1c40f;
-        }
-        .modal .settings-binding-row button[aria-pressed="true"] {
-            border-color: #f1c40f;
-            box-shadow: inset 0 0 0 1px rgba(241, 196, 15, 0.45);
-            color: #f1c40f;
-        }
-        .settings-timing {
-            display: grid;
-            gap: 12px;
-            margin: 0 0 16px;
-            padding: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.18);
-            border-radius: 8px;
-        }
-        .settings-timing label {
-            display: grid;
-            grid-template-columns: 88px 1fr 48px;
-            gap: 8px;
-            align-items: center;
-            color: #d6e7f5;
-            font-size: 13px;
-        }
-        .settings-timing input[type="range"] { width: 100%; }
-        .settings-timing output {
-            color: #f1c40f;
-            font-weight: 700;
-            text-align: right;
-            font-variant-numeric: tabular-nums;
-        }
-        #settings-screen .scenario-actions { justify-content: stretch; }
-        #settings-screen .scenario-actions button { flex: 1; }
-        #scenario-map-screen { width: min(calc(100% - 32px), 620px); }
-        #scenario-stage-list {
-            display: grid;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
-            gap: 8px;
-            margin: 16px 0;
-            background: linear-gradient(90deg, var(--player), var(--hud-border)) center / calc(100% - 118px) 3px no-repeat;
-        }
-        .modal #scenario-stage-list button {
-            min-height: 92px;
-            padding: 8px;
-            font-size: 12px;
-            white-space: pre-line;
-        }
-        .modal #scenario-stage-list button[aria-current="step"] {
-            box-shadow: inset 0 0 0 3px #fff;
-        }
-        .modal #scenario-stage-list button[aria-current="step"]::after {
-            content: "CURRENT" / "";
-            display: block;
-            margin-top: 3px;
-            font-size: 9px;
-            letter-spacing: 0.12em;
-        }
-        .modal button:disabled { cursor: not-allowed; opacity: 0.45; }
-        .modal #scenario-stage-list button:disabled {
-            opacity: 1;
-            border: 1px solid var(--hud-border);
-            background: var(--hud-surface);
-            color: var(--hud-muted);
-        }
-        #scenario-stage-detail, #scenario-briefing-screen dl {
-            margin: 16px 0;
-            padding: 14px;
-            border: 1px solid rgba(255, 255, 255, 0.18);
-            border-radius: 8px;
-            text-align: left;
-        }
-        #scenario-stage-detail p, #scenario-briefing-screen dd { margin: 6px 0; }
-        #scenario-briefing-screen dt { color: var(--hud-muted); font-size: 11px; }
-        #scenario-briefing-screen dd { margin-left: 0; }
-        .scenario-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-        #scenario-result-stars { min-height: 1em; color: var(--danger); }
-        .secondary-panel summary {
-            color: #d6e7f5;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: 700;
-            list-style-position: inside;
-        }
-        .secondary-panel summary + * {
-            margin-top: 10px;
-        }
-        #touch-controls {
-            display: none;
-            width: min(100%, 360px);
-            margin: 4px auto 0;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 8px;
-        }
-        #touch-controls[hidden] {
-            display: none;
-        }
-        #touch-controls button {
-            min-height: 48px;
-            border: 1px solid rgba(143, 211, 255, 0.5);
-            border-radius: 10px;
-            background: #213d55;
-            color: #fff;
-            cursor: pointer;
-            font-size: 18px;
-            font-weight: 700;
-        }
-        #touch-controls #touch-drop {
-            background: #f1c40f;
-            color: #161616;
-        }
-        @media (max-height: 800px) {
-            #game-container {
-                transform: none;
-            }
-        }
-        @media (max-height: 400px) {
-            #modal-overlay {
-                align-items: flex-start;
-                overflow-y: auto;
-                padding: 16px 0;
-                box-sizing: border-box;
-            }
-        }
-        @media (max-width: 760px), (orientation: portrait), (pointer: coarse) {
-            body {
-                height: auto;
-                min-height: 100vh;
-                justify-content: flex-start;
-                overflow-y: auto;
-                padding: 16px 0;
-                box-sizing: border-box;
-            }
-            #game-container {
-                display: grid;
-                grid-template-columns: minmax(0, 1fr);
-                width: min(calc(100% - 24px), 420px);
-                padding: 12px;
-                gap: 12px;
-                box-sizing: border-box;
-            }
-            #game-container:not(.versus-active) > #tetris {
-                width: min(100%, 240px);
-                height: auto;
-                justify-self: center;
-            }
-            #side-panel {
-                width: 100%;
-                display: grid;
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-                gap: 8px;
-            }
-            #side-panel .panel-box {
-                padding: 12px;
-                margin-bottom: 0;
-            }
-            #game-container.versus-active {
-                width: min(calc(100% - 24px), 520px);
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-            #game-container.versus-active #side-panel {
-                width: 100%;
-            }
-            #game-container.versus-active > #tetris,
-            #game-container.versus-active #opponent-panel,
-            #game-container.versus-active #opponent-board {
-                width: 100%;
-                height: auto;
-            }
-            #touch-controls:not([hidden]) {
-                display: grid;
-            }
-            .modal {
-                min-width: 0;
-                width: min(calc(100% - 32px), 420px);
-                padding: 22px;
-                box-sizing: border-box;
-            }
-            #scenario-map-screen {
-                max-height: calc(100vh - 32px);
-                overflow-y: auto;
-            }
-            .mode-options {
-                grid-template-columns: 1fr;
-            }
-            #scenario-stage-list {
-                grid-template-columns: 1fr;
-                background: linear-gradient(180deg, var(--player), var(--hud-border)) center / 3px calc(100% - 92px) no-repeat;
-            }
-            .modal .mode-card {
-                min-height: 52px;
-                text-align: left;
-            }
-            .modal .mode-card span {
-                display: inline;
-                margin-left: 6px;
-            }
-        }
-    </style>
-    <style id="arena-hud-styles">
-        :root {
-            --hud-bg: #060b12;
-            --hud-surface: #0d1724;
-            --hud-panel: #111d2d;
-            --hud-border: #263b52;
-            --hud-muted: #8298b2;
-            --player: #24d8ff;
-            --rival: #ff4f91;
-            --danger: #f2d14f;
-        }
-        body {
-            background:
-                radial-gradient(circle at 50% 20%, rgba(23, 62, 91, 0.35), transparent 42%),
-                linear-gradient(145deg, #03060a, #09111b 58%, #03060a);
-        }
+
+        /* —— Theater stage —— */
         #game-container,
         #game-container.versus-active {
+            position: relative;
             display: grid;
-            grid-template-columns: 248px 112px 248px 224px;
-            grid-template-rows: 48px 428px 62px;
+            grid-template-columns: 104px 248px 96px 248px 168px;
+            grid-template-rows: 48px 428px;
             grid-template-areas:
-                "header header header header"
-                "opponent versus player rail"
-                "footer footer footer footer";
+                "header header header header header"
+                "preview opponent versus player rail";
             align-items: stretch;
             justify-content: center;
             gap: 10px 12px;
-            width: 902px;
+            width: 904px;
             max-height: calc(100vh - 24px);
             padding: 12px;
-            box-sizing: content-box;
-            border: 1px solid rgba(71, 105, 137, 0.5);
-            border-radius: 16px;
-            background: rgba(6, 11, 18, 0.94);
-            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55), inset 0 0 60px rgba(24, 72, 108, 0.08);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--panel);
+            box-shadow: none;
+            transform: none;
         }
+
         #game-container:not(.versus-active) {
-            grid-template-columns: 100px 248px 224px;
+            grid-template-columns: 104px 248px 168px;
             grid-template-areas:
                 "header header header"
-                ". player rail"
-                "footer footer footer";
-            width: 596px;
+                "preview player rail";
+            width: 544px;
         }
+
+        #game-container.play-enter {
+            animation: stageEnter 240ms ease-out;
+        }
+
+        @keyframes stageEnter {
+            from { opacity: 0; transform: scale(0.985); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
         #arena-header {
             grid-area: header;
-            position: relative;
             display: flex;
             align-items: center;
-            gap: 18px;
+            gap: 14px;
             min-width: 0;
             padding: 0 12px;
-            border: 1px solid var(--hud-border);
-            border-radius: 9px;
-            background: linear-gradient(90deg, rgba(17, 29, 45, 0.96), rgba(9, 17, 28, 0.96));
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
         }
+
         .brand-lockup {
             display: flex;
             flex-direction: column;
-            min-width: 112px;
+            min-width: 96px;
             line-height: 1;
         }
+
         .brand-lockup strong {
-            color: #f6fbff;
-            font-size: 15px;
-            letter-spacing: 0.15em;
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
         }
+
         .brand-lockup span {
             margin-top: 4px;
-            color: var(--hud-muted);
-            font-size: 8px;
-            letter-spacing: 0.22em;
+            color: var(--muted);
+            font-size: 9px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
         }
+
         .match-meta {
             display: flex;
             align-items: center;
             gap: 12px;
             min-width: 0;
             margin-right: auto;
-            color: var(--hud-muted);
-            font-size: 11px;
+            color: var(--muted);
+            font-size: 12px;
+            font-variant-numeric: tabular-nums;
             white-space: nowrap;
         }
-        #mode, #timer { color: #c9d9e8 !important; font-size: 11px !important; }
-        #scenario-objective { color: var(--danger); font-size: 10px; font-weight: 800; letter-spacing: 0.08em; }
-        .header-actions { display: flex; align-items: center; gap: 6px; }
-        .header-menu { position: relative; }
-        .header-menu summary,
+
+        #mode, #timer {
+            color: var(--text) !important;
+            font-size: 12px !important;
+        }
+
+        #scenario-objective {
+            color: var(--danger);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        #pause-game-btn,
         #exit-game-btn {
             display: block;
             width: auto;
-            padding: 7px 9px;
-            border: 1px solid var(--hud-border);
+            padding: 8px 12px;
+            border: 1px solid var(--border);
             border-radius: 6px;
-            background: #101b2a;
-            color: #bfd1e2;
-            font-size: 10px;
-            font-weight: 700;
+            background: var(--panel);
+            color: var(--text);
+            font-size: 11px;
+            font-weight: 600;
             line-height: 1;
-            list-style: none;
+            cursor: pointer;
             white-space: nowrap;
         }
-        .header-menu summary::-webkit-details-marker { display: none; }
-        .header-menu[open] summary { color: #fff; border-color: var(--player); }
-        .header-menu > :not(summary) {
-            position: absolute;
-            top: 35px;
-            right: 0;
-            z-index: 20;
-            width: 220px;
-            padding: 12px;
-            border: 1px solid var(--hud-border);
-            border-radius: 8px;
-            background: #0c1521;
-            box-shadow: 0 16px 38px rgba(0, 0, 0, 0.55);
-            color: #c3d2e1;
+
+        #pause-game-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
         }
-        #exit-game-btn { border-color: rgba(255, 79, 145, 0.5); color: #ff91b8; cursor: pointer; }
+
+        #exit-game-btn {
+            border-color: rgba(255, 107, 138, 0.45);
+            color: #ff9db3;
+        }
+
+        #preview-rail {
+            grid-area: preview;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 104px;
+            height: 428px;
+            min-height: 0;
+        }
+
         #opponent-panel,
         #player-panel {
             width: 248px;
             align-self: stretch;
             text-align: center;
         }
+
         #opponent-panel { grid-area: opponent; color: var(--rival); }
-        #player-panel { grid-area: player; color: var(--player); }
+        #player-panel { grid-area: player; color: var(--accent); }
+
         #game-container:not(.versus-active) #opponent-panel,
         #game-container:not(.versus-active) #versus-status { display: none !important; }
+
         .board-label {
             height: 22px;
             color: currentColor;
             font-size: 10px;
-            font-weight: 800;
-            letter-spacing: 0.18em;
+            font-weight: 700;
+            letter-spacing: 0.16em;
             line-height: 18px;
         }
+
+        canvas {
+            display: block;
+            border: 1px solid var(--border);
+            background: #080a0e;
+            box-shadow: none;
+        }
+
         #tetris,
         #opponent-board,
         #game-container.versus-active > #tetris {
-            display: block;
             width: 240px;
             height: 400px;
             margin: 0 auto;
-            border: 2px solid currentColor;
-            border-radius: 3px;
-            background: #020509;
+            border: 2px solid var(--border);
+            border-left-color: var(--accent);
+            border-radius: 2px;
+            background: #080a0e;
         }
-        #tetris { box-shadow: 0 0 18px rgba(36, 216, 255, 0.28), inset 0 0 18px #000; }
-        #opponent-board { box-shadow: 0 0 18px rgba(255, 79, 145, 0.22), inset 0 0 18px #000; }
+
+        #opponent-board {
+            border-left-color: var(--rival);
+        }
+
         #versus-status {
             grid-area: versus;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 9px;
-            padding: 14px 10px;
-            border: 1px solid var(--hud-border);
-            border-radius: 10px;
-            background: linear-gradient(180deg, rgba(17, 29, 45, 0.92), rgba(8, 15, 24, 0.92));
+            gap: 8px;
+            padding: 12px 8px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
             text-align: center;
         }
-        .versus-mark { color: #f7fbff; font-size: 24px; letter-spacing: 0.1em; }
-        .versus-divider { width: 34px; height: 1px; background: var(--hud-border); }
-        .pressure-label { color: var(--hud-muted); font-size: 8px; letter-spacing: 0.08em; }
-        #opponent-lines { color: #d3deea; font-size: 10px; }
-        #opponent-garbage, #player-garbage { font-size: 9px; font-weight: 700; white-space: nowrap; }
+
+        .versus-mark { color: var(--text); font-size: 20px; letter-spacing: 0.08em; }
+        .versus-divider { width: 28px; height: 1px; background: var(--border); }
+        .pressure-label { color: var(--muted); font-size: 8px; letter-spacing: 0.08em; }
+        #opponent-lines { color: var(--text); font-size: 10px; font-variant-numeric: tabular-nums; }
+        #opponent-garbage, #player-garbage {
+            font-size: 9px;
+            font-weight: 700;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
         #opponent-garbage { color: var(--rival); }
-        #player-garbage { color: var(--player); }
-        .garbage-meter { width: 76px; height: 6px; overflow: hidden; border-radius: 8px; background: #263447; }
-        .garbage-meter span { display: block; width: 0; height: 100%; background: var(--danger); transition: width 0.2s ease; }
+        #player-garbage { color: var(--accent); }
+        .garbage-meter {
+            width: 72px;
+            height: 5px;
+            overflow: hidden;
+            border-radius: 2px;
+            background: var(--border);
+        }
+        .garbage-meter span {
+            display: block;
+            width: 0;
+            height: 100%;
+            background: var(--danger);
+            transition: width 0.2s ease;
+        }
+
         #side-panel {
             grid-area: rail;
-            display: grid;
-            grid-template-columns: 1fr;
-            grid-template-rows: auto minmax(0, 1fr);
-            width: 224px;
+            display: flex;
+            flex-direction: column;
+            width: 168px;
             height: 428px;
-            gap: 10px;
+            gap: 8px;
             overflow: hidden;
             min-height: 0;
         }
-        #game-container.versus-active #side-panel,
-        #game-container:not(.versus-active) #side-panel {
-            grid-area: rail;
-            width: 224px;
-            max-height: none;
-            overflow: visible;
-        }
-        #side-panel .panel-box {
+
+        .panel-box {
             margin: 0;
             padding: 12px;
-            border: 1px solid var(--hud-border);
-            border-radius: 10px;
-            background: linear-gradient(145deg, rgba(17, 29, 45, 0.96), rgba(10, 18, 29, 0.96));
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
             box-shadow: none;
+            text-align: center;
         }
-        #side-panel .stats-panel { text-align: left; }
-        #score { margin: 5px 0 8px; color: #f6fbff; font-size: 27px !important; letter-spacing: 0.03em; }
-        #level { color: var(--danger) !important; font-size: 12px !important; }
-        .preview-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            height: 100%;
+
+        #side-panel .stats-panel { text-align: left; flex-shrink: 0; }
+        #side-panel .meta-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
             min-height: 0;
-            align-items: stretch;
+            overflow: auto;
         }
-        .preview-grid .panel-box {
+
+        .panel-label {
+            margin-bottom: 8px;
+            color: var(--muted);
+            font-size: 9px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            flex-shrink: 0;
+        }
+
+        #score {
+            margin: 4px 0 8px;
+            color: var(--text);
+            font-size: 24px !important;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            font-variant-numeric: tabular-nums;
+            text-shadow: none;
+        }
+
+        #level {
+            color: var(--accent) !important;
+            font-size: 12px !important;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .preview-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex: 1;
+            min-height: 0;
+            height: 100%;
+        }
+
+        .preview-stack .panel-box {
             display: flex;
             flex-direction: column;
             align-items: center;
             min-height: 0;
         }
-        .preview-grid .panel-box--hold { justify-content: flex-start; }
-        .preview-grid .panel-box--next { justify-content: stretch; flex: 1; }
-        .panel-label { margin-bottom: 8px; color: var(--hud-muted); font-size: 9px; letter-spacing: 0.14em; flex-shrink: 0; }
+
+        .preview-stack .panel-box--hold { flex-shrink: 0; }
+        .preview-stack .panel-box--next {
+            flex: 1;
+            justify-content: flex-start;
+            min-height: 0;
+        }
+
         #hold {
             width: 80px;
             height: 80px;
-            border: 1px solid #33465c;
-            box-shadow: inset 0 0 16px #000;
+            border: 1px solid var(--border);
+            box-shadow: none;
         }
+
         #next {
             width: 80px;
-            height: 100%;
+            height: auto;
             flex: 1;
-            min-height: 0;
-            max-height: 400px;
-            border: 1px solid #33465c;
-            box-shadow: inset 0 0 16px #000;
+            min-height: 240px;
+            max-height: 320px;
+            border: 1px solid var(--border);
+            box-shadow: none;
         }
-        #match-footer {
-            grid-area: footer;
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+
+        .status-row {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--panel);
+            color: var(--muted);
+            font-size: 9px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .status-row span {
+            color: var(--text);
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0;
+            font-variant-numeric: tabular-nums;
+            text-transform: none;
+        }
+
+        #event-message { color: var(--accent); }
+
+        #touch-controls {
+            display: none;
+            width: min(100%, 360px);
+            margin: 10px auto 0;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 8px;
         }
-        .status-chip {
+
+        #touch-controls[hidden] { display: none; }
+
+        #touch-controls button {
+            min-height: 48px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--panel);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            box-shadow: none;
+        }
+
+        #touch-controls #touch-drop {
+            background: var(--accent);
+            color: #0e1014;
+            border-color: var(--accent);
+        }
+
+        /* —— Modals —— */
+        #modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(8, 10, 14, 0.82);
+            backdrop-filter: blur(4px);
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        #modal-overlay.menu-enter #start-screen {
+            animation: menuEnter 260ms ease-out;
+        }
+
+        @keyframes menuEnter {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .modal {
+            background: var(--panel);
+            padding: 28px 26px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            text-align: center;
+            box-shadow: none;
+            min-width: 300px;
+            animation: modalAppear 0.24s ease-out;
+        }
+
+        @keyframes modalAppear {
+            from { transform: scale(0.96); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .modal h2 {
+            margin: 0 0 8px;
+            color: var(--text);
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+
+        .modal input, .modal select {
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+            margin: 12px 0;
+            min-width: 180px;
+            text-align: center;
+        }
+
+        .modal button {
+            background: var(--panel);
+            color: var(--text);
+            border: 1px solid var(--border);
+            padding: 10px 18px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 15px;
+        }
+
+        .modal button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .modal button:disabled { cursor: not-allowed; opacity: 0.45; }
+
+        /* Start menu Theater composition */
+        #start-screen {
+            width: min(calc(100% - 32px), 420px);
+            padding: 32px 28px 24px;
+        }
+
+        #start-screen.start-hero {
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            min-width: 0;
-            border: 1px solid var(--hud-border);
-            border-radius: 8px;
-            background: #0e1927;
-            color: var(--hud-muted);
-            font-size: 9px;
+        }
+
+        .start-brand {
+            margin: 0;
+            font-size: clamp(2rem, 6vw, 2.6rem);
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            color: var(--text);
+            line-height: 1.05;
+        }
+
+        .start-tagline {
+            margin: 10px 0 18px;
+            color: var(--muted);
+            font-size: 15px;
+            font-weight: 500;
+        }
+
+        .board-silhouette {
+            width: min(100%, 168px);
+            aspect-ratio: 3 / 5;
+            margin: 0 0 22px;
+            border: 2px solid var(--border);
+            border-left: 3px solid var(--accent);
+            border-radius: 2px;
+            background:
+                repeating-linear-gradient(
+                    to bottom,
+                    transparent 0 19px,
+                    rgba(42, 47, 58, 0.55) 19px 20px
+                ),
+                linear-gradient(180deg, #12151c, #080a0e);
+            position: relative;
+        }
+
+        .board-silhouette::after {
+            content: "";
+            position: absolute;
+            left: 28%;
+            top: 18%;
+            width: 44%;
+            height: 22%;
+            border: 1px solid rgba(94, 234, 212, 0.35);
+            background: rgba(94, 234, 212, 0.08);
+        }
+
+        #start-game-btn {
+            width: 100%;
+            margin: 0 0 14px;
+            padding: 14px 20px;
+            background: var(--accent);
+            color: #0e1014;
+            border-color: var(--accent);
+            font-size: 17px;
+            font-weight: 700;
             letter-spacing: 0.06em;
         }
-        .status-chip span { margin-top: 4px; color: #eef7ff; font-size: 12px; font-weight: 800; letter-spacing: 0; }
-        #event-message { color: var(--danger); }
-        #touch-controls { margin-top: 10px; }
+
+        #start-game-btn:hover {
+            background: #7ff0de;
+            color: #0e1014;
+            border-color: #7ff0de;
+        }
+
+        .mode-options {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            width: 100%;
+            margin: 0 0 14px;
+        }
+
+        .modal .mode-card {
+            min-height: 70px;
+            padding: 10px 8px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1.25;
+            box-shadow: none;
+        }
+
+        .modal .mode-card span {
+            display: block;
+            margin-top: 5px;
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 400;
+        }
+
+        .modal .mode-card[aria-pressed="true"] {
+            border-color: var(--accent);
+            background: rgba(94, 234, 212, 0.08);
+            box-shadow: none;
+        }
+
+        .menu-secondary-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            width: 100%;
+            margin: 0 0 10px;
+        }
+
+        .modal .menu-secondary-actions button {
+            width: 100%;
+            margin: 0;
+            background: var(--bg);
+        }
+
+        #scenario-continue-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text);
+            text-align: left;
+            box-shadow: none;
+        }
+
+        #scenario-continue-btn strong {
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+
+        #scenario-continue-btn small {
+            color: var(--muted);
+            font-size: 11px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .menu-tertiary-actions {
+            display: flex;
+            justify-content: center;
+            gap: 18px;
+            width: 100%;
+            margin-top: 4px;
+        }
+
+        .menu-tertiary-actions button {
+            background: transparent;
+            border: none;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 500;
+            padding: 6px 4px;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+
+        .menu-tertiary-actions button:hover {
+            color: var(--text);
+            border: none;
+        }
+
+        #menu-exit-btn.menu-link {
+            width: auto;
+            margin: 0;
+            background: transparent;
+        }
+
+        .pause-actions {
+            display: grid;
+            gap: 10px;
+            margin-top: 4px;
+        }
+
+        .modal .pause-actions button {
+            width: 100%;
+            margin: 0;
+            background: var(--bg);
+        }
+
+        #resume-game-btn {
+            background: var(--accent) !important;
+            color: #0e1014 !important;
+            border-color: var(--accent) !important;
+        }
+
+        #settings-screen {
+            width: min(calc(100% - 32px), 420px);
+            max-height: min(90vh, 720px);
+            overflow-y: auto;
+            text-align: left;
+        }
+
+        #settings-screen h2 { text-align: center; }
+
+        #settings-screen fieldset {
+            margin: 0 0 14px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+        }
+
+        #settings-screen legend {
+            color: var(--accent);
+            font-size: 11px;
+            letter-spacing: 0.12em;
+            padding: 0 6px;
+        }
+
+        .settings-presets {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            color: var(--text);
+            font-size: 14px;
+        }
+
+        .settings-presets label { cursor: pointer; }
+
+        .settings-bindings {
+            display: grid;
+            gap: 8px;
+            margin: 0 0 14px;
+        }
+
+        .settings-binding-row {
+            display: grid;
+            grid-template-columns: 1fr minmax(120px, 1.2fr);
+            gap: 8px;
+            align-items: center;
+        }
+
+        .settings-binding-row span {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .modal .settings-binding-row button {
+            width: 100%;
+            padding: 8px 10px;
+            font-size: 13px;
+            background: var(--bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .modal .settings-binding-row button:hover {
+            background: rgba(94, 234, 212, 0.08);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .modal .settings-binding-row button[aria-pressed="true"] {
+            border-color: var(--accent);
+            box-shadow: none;
+            color: var(--accent);
+        }
+
+        .settings-timing {
+            display: grid;
+            gap: 12px;
+            margin: 0 0 16px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+        }
+
+        .settings-timing label {
+            display: grid;
+            grid-template-columns: 88px 1fr 48px;
+            gap: 8px;
+            align-items: center;
+            color: var(--text);
+            font-size: 13px;
+        }
+
+        .settings-timing input[type="range"] { width: 100%; }
+
+        .settings-timing output {
+            color: var(--accent);
+            font-weight: 700;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .settings-audio {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin: 0 0 16px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 14px;
+        }
+
+        .settings-audio label { cursor: pointer; }
+
+        #settings-screen .scenario-actions { justify-content: stretch; }
+        #settings-screen .scenario-actions button { flex: 1; }
+
+        #scenario-map-screen { width: min(calc(100% - 32px), 620px); }
+
+        #scenario-stage-list {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 8px;
+            margin: 16px 0;
+            background: linear-gradient(90deg, var(--accent), var(--border)) center / calc(100% - 118px) 2px no-repeat;
+        }
+
+        .modal #scenario-stage-list button {
+            min-height: 92px;
+            padding: 8px;
+            font-size: 12px;
+            white-space: pre-line;
+            background: var(--bg);
+        }
+
+        .modal #scenario-stage-list button[aria-current="step"] {
+            border-color: var(--accent);
+            box-shadow: inset 0 0 0 1px var(--accent);
+        }
+
+        .modal #scenario-stage-list button[aria-current="step"]::after {
+            content: "CURRENT" / "";
+            display: block;
+            margin-top: 3px;
+            font-size: 9px;
+            letter-spacing: 0.12em;
+            color: var(--accent);
+        }
+
+        .modal #scenario-stage-list button:disabled {
+            opacity: 1;
+            border: 1px solid var(--border);
+            background: var(--panel);
+            color: var(--muted);
+        }
+
+        #scenario-stage-detail, #scenario-briefing-screen dl {
+            margin: 16px 0;
+            padding: 14px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            text-align: left;
+        }
+
+        #scenario-stage-detail p, #scenario-briefing-screen dd { margin: 6px 0; }
+        #scenario-briefing-screen dt { color: var(--muted); font-size: 11px; }
+        #scenario-briefing-screen dd { margin-left: 0; }
+        .scenario-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+        #scenario-result-stars { min-height: 1em; color: var(--danger); }
+
+        .btn-exit {
+            background: transparent;
+            color: var(--rival);
+            border: 1px solid rgba(255, 107, 138, 0.45);
+        }
+
+        @media (max-height: 400px) {
+            #modal-overlay {
+                align-items: flex-start;
+                overflow-y: auto;
+                padding: 16px 0;
+            }
+
+            #start-screen {
+                padding: 18px 20px 16px;
+            }
+
+            .board-silhouette {
+                display: none;
+            }
+
+            .start-brand { font-size: 1.7rem; }
+            .start-tagline { margin: 6px 0 12px; font-size: 13px; }
+            #start-game-btn { margin-bottom: 10px; padding: 10px 16px; }
+            .mode-options { margin-bottom: 10px; }
+            .modal .mode-card { min-height: 48px; padding: 8px; }
+        }
 
         @media (max-width: 760px), (orientation: portrait), (pointer: coarse) {
-            body { height: auto; min-height: 100vh; overflow-y: auto; padding: 12px 0; }
+            body {
+                height: auto;
+                min-height: 100vh;
+                justify-content: flex-start;
+                overflow-y: auto;
+                padding: 12px 0;
+            }
+
             #game-container,
             #game-container.versus-active,
             #game-container:not(.versus-active) {
                 width: min(calc(100% - 20px), 720px);
                 max-height: none;
                 padding: 10px;
-                box-sizing: border-box;
                 grid-template-rows: auto;
             }
+
             #game-container:not(.versus-active) {
                 grid-template-columns: 1fr;
-                grid-template-areas: "header" "player" "rail" "footer";
+                grid-template-areas:
+                    "header"
+                    "player"
+                    "preview"
+                    "rail";
             }
+
             #game-container.versus-active {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
-                grid-template-areas: "header header" "opponent player" "versus versus" "rail rail" "footer footer";
+                grid-template-areas:
+                    "header header"
+                    "opponent player"
+                    "versus versus"
+                    "preview preview"
+                    "rail rail";
             }
-            #arena-header { min-height: 54px; flex-wrap: wrap; gap: 7px 10px; padding: 8px 10px; }
+
+            #arena-header {
+                min-height: 54px;
+                flex-wrap: wrap;
+                gap: 7px 10px;
+                padding: 8px 10px;
+            }
+
             .brand-lockup { margin-right: auto; }
             .match-meta { order: 3; width: 100%; }
-            .header-actions { gap: 4px; }
-            .header-menu summary, #exit-game-btn { padding: 6px; font-size: 9px; }
+
             #opponent-panel, #player-panel { width: 100%; height: auto; }
+
             #tetris, #opponent-board, #game-container.versus-active > #tetris {
                 width: min(100%, 240px);
                 height: auto;
                 aspect-ratio: 3 / 5;
             }
-            #versus-status { min-height: 82px; flex-direction: row; flex-wrap: wrap; padding: 10px; }
-            #side-panel { width: 100%; height: auto; grid-template-columns: 1fr 2fr; grid-template-rows: auto; }
-            #match-footer { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-            .status-chip { min-height: 52px; }
+
+            #versus-status {
+                min-height: 82px;
+                flex-direction: row;
+                flex-wrap: wrap;
+                padding: 10px;
+            }
+
+            #preview-rail, #side-panel {
+                width: 100%;
+                height: auto;
+            }
+
+            .preview-stack { flex-direction: row; align-items: stretch; }
+            .preview-stack .panel-box--hold { flex: 0 0 auto; }
+            .preview-stack .panel-box--next { flex: 1; }
+            #next { max-height: 220px; min-height: 160px; }
+
+            #side-panel .meta-panel {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
             #touch-controls:not([hidden]) { display: grid; }
+
+            .modal {
+                min-width: 0;
+                width: min(calc(100% - 32px), 420px);
+                padding: 22px;
+            }
+
+            #scenario-map-screen {
+                max-height: calc(100vh - 32px);
+                overflow-y: auto;
+            }
+
+            .mode-options { grid-template-columns: 1fr; }
+
+            #scenario-stage-list {
+                grid-template-columns: 1fr;
+                background: linear-gradient(180deg, var(--accent), var(--border)) center / 2px calc(100% - 92px) no-repeat;
+            }
+
+            .modal .mode-card {
+                min-height: 52px;
+                text-align: left;
+            }
+
+            .modal .mode-card span {
+                display: inline;
+                margin-left: 6px;
+            }
         }
+
         @media (prefers-reduced-motion: reduce) {
-            .modal { animation: none; }
-            .modal .campaign-card { box-shadow: none; transition: none; }
+            .modal,
+            #modal-overlay.menu-enter #start-screen,
+            #game-container.play-enter {
+                animation: none;
+            }
+            #scenario-continue-btn { box-shadow: none; transition: none; }
             .garbage-meter span { transition: none; }
         }
     </style>
@@ -818,36 +1043,30 @@
 <body>
     <div id="game-container">
         <header id="arena-header">
-            <div class="brand-lockup"><strong>NEON DROP</strong><span>ARCADE SYSTEM</span></div>
+            <div class="brand-lockup"><strong>NEON DROP</strong><span>THEATER</span></div>
             <div class="match-meta">
                 <span id="mode">Mode: Marathon</span>
                 <span id="timer">Time: 00:00</span>
                 <span id="scenario-objective" hidden>OBJECTIVE 0 / 8</span>
             </div>
             <nav class="header-actions" aria-label="Game options">
-                <details class="header-menu">
-                    <summary>Ranks</summary>
-                    <div id="leaderboard" style="font-size: 12px; line-height: 1.7;">Loading...</div>
-                </details>
-                <details class="header-menu">
-                    <summary>Sound</summary>
-                    <div style="display: flex; flex-direction: column; gap: 10px;">
-                        <label><input type="checkbox" id="bgm-toggle" checked> BGM</label>
-                        <label><input type="checkbox" id="sfx-toggle" checked> SFX</label>
-                    </div>
-                </details>
-                <details id="game-help" class="header-menu">
-                    <summary>Help</summary>
-                    <div style="font-size: 11px; line-height: 1.75;">
-                        ← → Move · ↓ Soft Drop<br>
-                        ↑ Rotate · Space Hard Drop<br>
-                        C Hold · ESC / P Pause<br>
-                        Versus: clear lines to attack
-                    </div>
-                </details>
+                <button type="button" id="pause-game-btn" aria-label="Pause game">Pause</button>
                 <button class="btn-exit" id="exit-game-btn" aria-label="Exit Game">Exit</button>
             </nav>
         </header>
+
+        <aside id="preview-rail" aria-label="Hold and next pieces">
+            <div class="preview-stack">
+                <div class="panel-box panel-box--hold">
+                    <div class="panel-label">Hold</div>
+                    <canvas id="hold" width="80" height="80"></canvas>
+                </div>
+                <div class="panel-box panel-box--next">
+                    <div class="panel-label">Next</div>
+                    <canvas id="next" width="80" height="400"></canvas>
+                </div>
+            </div>
+        </aside>
 
         <div id="opponent-panel" aria-label="AI opponent" style="display: none;">
             <div class="board-label">AI RIVAL</div>
@@ -873,28 +1092,19 @@
 
         <aside id="side-panel">
             <div class="panel-box stats-panel">
-                <div class="panel-label">PLAYER SCORE</div>
+                <div class="panel-label">Score</div>
                 <div id="score" style="font-weight: bold;">Score: 0</div>
                 <div id="level">Level: 1</div>
             </div>
-            <div class="preview-grid">
-                <div class="panel-box panel-box--hold">
-                    <div class="panel-label">HOLD</div>
-                    <canvas id="hold" width="80" height="80"></canvas>
-                </div>
-                <div class="panel-box panel-box--next">
-                    <div class="panel-label">NEXT</div>
-                    <canvas id="next" width="80" height="400"></canvas>
-                </div>
+            <div class="meta-panel" aria-label="Match meta">
+                <div class="status-row">Lines<span id="lines">0</span></div>
+                <div class="status-row">Combo<span id="combo">0</span></div>
+                <div class="status-row">Back-to-Back<span id="back-to-back">Ready</span></div>
+                <div class="status-row">Event<span id="event-message" aria-live="polite">—</span></div>
             </div>
         </aside>
 
-        <footer id="match-footer">
-            <div class="status-chip">LINES<span id="lines">0</span></div>
-            <div class="status-chip">COMBO<span id="combo">0</span></div>
-            <div class="status-chip">BACK-TO-BACK<span id="back-to-back">Ready</span></div>
-            <div class="status-chip">EVENT<span id="event-message" aria-live="polite">—</span></div>
-        </footer>
+        <div id="leaderboard" class="visually-hidden" aria-hidden="true">Loading...</div>
     </div>
     <div id="touch-controls" aria-label="Touch controls" hidden>
         <button id="touch-left" type="button" aria-label="Move left">←</button>
@@ -904,24 +1114,22 @@
         <button id="touch-drop" type="button" aria-label="Hard drop">Drop</button>
         <button id="touch-hold" type="button" aria-label="Hold piece">Hold</button>
     </div>
-    <div id="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="start-screen-title">
-        <!-- Pause Screen -->
+    <div id="modal-overlay" class="menu-enter" role="dialog" aria-modal="true" aria-labelledby="start-screen-title">
         <div id="pause-screen" class="modal" style="display: none;">
-            <h2 id="pause-screen-title">PAUSED</h2>
-            <p style="color: #aaa; margin-bottom: 20px;">Take a breath!</p>
-            <button id="resume-game-btn">Resume Game</button>
-            <button id="pause-settings-btn" type="button" style="background: #3498db; margin-left: 10px;">Settings</button>
-            <button id="quit-to-menu-btn" style="background: #e74c3c; margin-left: 10px;">Quit to Menu</button>
+            <h2 id="pause-screen-title">Paused</h2>
+            <p style="color: var(--muted); margin: 0 0 18px;">Board is waiting.</p>
+            <div class="pause-actions">
+                <button id="resume-game-btn">Resume</button>
+                <button id="pause-settings-btn" type="button">Settings</button>
+                <button id="quit-to-menu-btn" class="btn-exit">Quit to Menu</button>
+            </div>
         </div>
 
-        <!-- Start Screen -->
-        <div id="start-screen" class="modal" style="display: block;">
-            <h2 id="start-screen-title">NEON DROP</h2>
-            <p style="color: #c4ced7; margin-bottom: 14px;">Choose a mode and start playing.</p>
-            <button id="scenario-continue-btn" class="campaign-card" type="button">
-                <span>CONTINUE CAMPAIGN</span><strong>NEON CIRCUIT</strong>
-                <small id="scenario-continue-detail">STAGE 01 · BYTE</small>
-            </button>
+        <div id="start-screen" class="modal start-hero" style="display: block;">
+            <h2 id="start-screen-title" class="start-brand">Neon Drop</h2>
+            <p class="start-tagline">One board. Full focus.</p>
+            <div class="board-silhouette" aria-hidden="true"></div>
+            <button id="start-game-btn" type="button">Play</button>
             <label for="game-mode" class="visually-hidden">Game mode</label>
             <select id="game-mode" class="visually-hidden" aria-label="Game mode">
                 <option value="marathon">Marathon</option>
@@ -933,16 +1141,21 @@
                 <button type="button" class="mode-card" data-mode-card="sprint" data-mode="sprint" aria-pressed="false">Sprint<span>Clear 40 lines fast</span></button>
                 <button type="button" class="mode-card" data-mode-card="versus" data-mode="versus" aria-pressed="false">Versus AI<span>Send garbage to your rival</span></button>
             </div>
-            <button id="start-game-btn">Start Game</button>
             <div class="menu-secondary-actions">
-                <button id="menu-settings-btn" type="button" style="background: #3498db;">Settings</button>
-                <button id="view-leaderboard-btn" type="button" style="background: #3498db;">Leaderboard</button>
-                <button id="menu-exit-btn" class="btn-exit" type="button" aria-label="Exit Game">Exit Game</button>
+                <button id="scenario-continue-btn" type="button">
+                    <strong>Circuit</strong>
+                    <small id="scenario-continue-detail">STAGE 01 · BYTE</small>
+                </button>
+                <button id="menu-settings-btn" type="button">Settings</button>
+            </div>
+            <div class="menu-tertiary-actions">
+                <button id="view-leaderboard-btn" type="button">Leaderboard</button>
+                <button id="menu-exit-btn" class="btn-exit menu-link" type="button" aria-label="Exit Game">Exit</button>
             </div>
         </div>
 
         <div id="settings-screen" class="modal" style="display: none;" aria-labelledby="settings-screen-title">
-            <h2 id="settings-screen-title">SETTINGS</h2>
+            <h2 id="settings-screen-title">Settings</h2>
             <fieldset>
                 <legend>PRESET</legend>
                 <div class="settings-presets" role="radiogroup" aria-label="Control preset">
@@ -967,8 +1180,15 @@
                 <label for="settings-arr">ARR <input type="range" id="settings-arr" min="0" max="100" step="1" value="33"> <output id="settings-arr-value" for="settings-arr">33</output></label>
                 <label for="settings-lock-delay">Lock <input type="range" id="settings-lock-delay" min="100" max="1000" step="1" value="500"> <output id="settings-lock-delay-value" for="settings-lock-delay">500</output></label>
             </div>
+            <fieldset>
+                <legend>AUDIO</legend>
+                <div class="settings-audio">
+                    <label><input type="checkbox" id="bgm-toggle" checked> BGM</label>
+                    <label><input type="checkbox" id="sfx-toggle" checked> SFX</label>
+                </div>
+            </fieldset>
             <div class="scenario-actions">
-                <button id="settings-reset-btn" type="button" style="background: #95a5a6;">Reset Controls</button>
+                <button id="settings-reset-btn" type="button">Reset Controls</button>
                 <button id="settings-back-btn" type="button">Back</button>
             </div>
         </div>
@@ -1028,7 +1248,6 @@
             <button id="exit-return-btn" type="button">Return to Menu</button>
         </div>
 
-        <!-- High Score / Game Over Screen -->
         <div id="game-over-screen" class="modal" style="display: none;">
             <h2 id="game-over-title">Game Over!</h2>
             <p>Your Score: <span id="final-score">0</span></p>
@@ -1038,15 +1257,13 @@
                 <button id="save-score-btn">Save Score</button>
             </div>
             <div id="game-over-footer" style="margin-top: 20px;">
-                <button id="game-over-menu-btn" type="button" style="background: #95a5a6;">Main Menu</button>
+                <button id="game-over-menu-btn" type="button">Main Menu</button>
             </div>
         </div>
 
-        <!-- Leaderboard Screen -->
         <div id="leaderboard-screen" class="modal" style="display: none;">
             <h2 id="leaderboard-screen-title">Top 5 Legends</h2>
             <div id="leaderboard-list" style="text-align: left; margin: 20px 0; line-height: 2; font-size: 18px;">
-                <!-- Scores go here -->
             </div>
             <button id="close-leaderboard-btn">Close</button>
         </div>

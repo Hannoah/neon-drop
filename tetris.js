@@ -115,6 +115,7 @@ const exitReturnBtn = document.getElementById('exit-return-btn');
 const closeLeaderboardBtn = document.getElementById('close-leaderboard-btn');
 const leaderboardList = document.getElementById('leaderboard-list');
 const exitGameBtn = document.getElementById('exit-game-btn');
+const pauseGameBtn = document.getElementById('pause-game-btn');
 const pauseScreen = document.getElementById('pause-screen');
 const resumeGameBtn = document.getElementById('resume-game-btn');
 const pauseSettingsBtn = document.getElementById('pause-settings-btn');
@@ -336,7 +337,7 @@ function openModal(labelId, focusTarget) {
     modalOverlay.setAttribute('aria-labelledby', labelId);
     gameContainer.inert = true;
     touchControls.inert = true;
-    focusTarget.focus();
+    focusTarget.focus({ preventScroll: true });
 }
 
 function restorePreviousFocus() {
@@ -550,6 +551,10 @@ function startScenarioStage(stageId) {
     isPaused = false;
     opponentPanel.style.display = stage.kind === 'opponent' ? 'block' : 'none';
     gameContainer.classList.toggle('versus-active', stage.kind === 'opponent');
+    gameContainer.classList.remove('play-enter');
+    void gameContainer.offsetWidth;
+    gameContainer.classList.add('play-enter');
+    modalOverlay.classList.remove('menu-enter');
     closeModal();
     hideModalScreens();
     touchControls.hidden = false;
@@ -1207,9 +1212,10 @@ function showStartScreen() {
     opponentPanel.style.display = 'none';
     touchControls.hidden = true;
     scenarioObjective.hidden = true;
-    gameContainer.classList.remove('versus-active');
+    gameContainer.classList.remove('versus-active', 'play-enter');
     hideModalScreens();
     startScreen.style.display = 'block';
+    modalOverlay.classList.add('menu-enter');
     const unlockedStage = SCENARIO_STAGES[scenarioProgress.unlockedStage - 1];
     scenarioContinueDetail.textContent = scenarioProgress.pendingRewardStage !== null
         ? `UPGRADE READY · STAGE ${String(scenarioProgress.pendingRewardStage).padStart(2, '0')}`
@@ -1295,6 +1301,10 @@ startGameBtn.addEventListener('click', () => {
     gameMode = gameModeSelect.value;
     opponentPanel.style.display = gameMode === 'versus' ? 'block' : 'none';
     gameContainer.classList.toggle('versus-active', gameMode === 'versus');
+    gameContainer.classList.remove('play-enter');
+    void gameContainer.offsetWidth;
+    gameContainer.classList.add('play-enter');
+    modalOverlay.classList.remove('menu-enter');
     isGameOver = false;
     isPaused = false;
     closeModal();
@@ -1676,6 +1686,10 @@ function quitGame() {
     returnToMenu();
 }
 
+pauseGameBtn.addEventListener('click', () => {
+    if (!player.matrix || isGameOver) return;
+    if (!isPaused) togglePause();
+});
 exitGameBtn.addEventListener('click', quitGame);
 
 //Expose state and functions to Playwright tests that rely on global scope.
