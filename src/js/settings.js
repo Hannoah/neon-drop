@@ -102,12 +102,19 @@ export function assignBinding(settings, action, code) {
     next.preset = 'custom';
     next.bindings = cloneBindings(next.bindings);
 
-    for (const other of BINDING_ACTIONS) {
-        if (other === action) {
-            next.bindings[other] = [code];
-        } else {
-            next.bindings[other] = next.bindings[other].filter(key => key !== code);
-        }
+    const oldKeys = [...next.bindings[action]];
+    const other = BINDING_ACTIONS.find(
+        candidate => candidate !== action && next.bindings[candidate].includes(code),
+    );
+
+    next.bindings[action] = [code];
+    if (other) {
+        next.bindings[other] = oldKeys;
+    }
+
+    for (const candidate of BINDING_ACTIONS) {
+        if (candidate === action || candidate === other) continue;
+        next.bindings[candidate] = next.bindings[candidate].filter(key => key !== code);
     }
 
     return next;

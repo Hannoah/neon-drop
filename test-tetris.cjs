@@ -2304,6 +2304,77 @@ async function testNextFivePreview(browser, url) {
   await page.close();
 }
 
+async function testLockPreservedAcrossSettings(browser, url) {
+  const { page, pageErrors } = await openPage(browser, url);
+  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press('p');
+  assert.equal(await page.evaluate(() => isPaused), true, 'P must open pause before settings');
+
+  const before = await page.evaluate(() => {
+    arena.forEach(row => row.fill(0));
+    for (let x = 0; x < arena[0].length; x++) arena[arena.length - 1][x] = 1;
+    player.matrix = createPiece('T');
+    player.pos = { x: 3, y: arena.length - 4 };
+    lockState = {
+      lockDelay: 500,
+      timer: 120,
+      active: true,
+      resets: 3,
+      shouldLock: false,
+    };
+    player.lockDelay = 500;
+    player.lockTimer = 120;
+    return {
+      timer: lockState.timer,
+      resets: lockState.resets,
+      active: lockState.active,
+    };
+  });
+
+  await page.locator('#pause-settings-btn').click();
+  await page.locator('#settings-das').fill('250');
+
+  const afterSettings = await page.evaluate(() => ({
+    timer: lockState.timer,
+    resets: lockState.resets,
+    active: lockState.active,
+    lockDelay: lockState.lockDelay,
+    playerLockTimer: player.lockTimer,
+    das: settings.timing.das,
+  }));
+
+  assert.equal(afterSettings.das, 250, 'DAS change from pause settings must apply');
+  assert.equal(afterSettings.active, true, 'active lock must remain active after settings change');
+  assert.equal(afterSettings.timer, before.timer,
+    'active lock timer must not reset to full delay when DAS changes');
+  assert.equal(afterSettings.resets, before.resets, 'lock resets must survive settings apply');
+  assert.equal(afterSettings.playerLockTimer, before.timer,
+    'player.lockTimer must stay in sync with the preserved lock timer');
+  assert.ok(afterSettings.timer < afterSettings.lockDelay,
+    'preserved timer must still be below the configured lock delay');
+
+  await page.locator('#settings-back-btn').click();
+  await page.locator('#resume-game-btn').click();
+
+  const progressed = await page.evaluate(() => {
+    lockState = onGroundContact(lockState);
+    lockState = tickLock(lockState, 50);
+    player.lockTimer = lockState.timer;
+    return {
+      timer: lockState.timer,
+      shouldLock: lockState.shouldLock,
+      active: lockState.active,
+    };
+  });
+
+  assert.equal(progressed.active, true, 'lock must stay active after resume');
+  assert.equal(progressed.timer, before.timer - 50, 'shouldLock path must keep counting down');
+  assert.equal(progressed.shouldLock, false, 'partial tick must not immediately lock');
+  assert.equal(pageErrors.length, 0, 'lock preservation across settings must not throw');
+  await page.close();
+}
+
 async function testSoftDropHoldPath(browser, url) {
   const { page, pageErrors } = await openPage(browser, url);
   await page.getByRole('button', { name: 'Start Game' }).click();
@@ -2495,6 +2566,7 @@ async function testUsabilityUI(browser, url) {
     await testScoreSave(browser, url);
     await testGameplayEnhancements(browser, url);
     await testNextFivePreview(browser, url);
+    await testLockPreservedAcrossSettings(browser, url);
     await testSoftDropHoldPath(browser, url);
     await testVersusMode(browser, url);
     await testScenarioRivalsAndUpgrades(browser, url);

@@ -15,7 +15,7 @@ Wave A Guideline 코어를 반영했다. 모든 모드가 SRS 회전, DAS/ARR, �
 - `srs.js`: 월킥 포함 SRS 회전
 - `lock.js`: 락 딜레이와 리셋
 - `input.js`: 좌우 DAS/ARR, 소프트 드롭 홀드
-- `settings.js`: preferences v2, Classic/Guideline 프리셋, 바인딩 충돌 교체
+- `settings.js`: preferences v2, Classic/Guideline 프리셋, 바인딩 충돌 시 키 스왑(`assignBinding`)
 - `scoring.js` / `constants.js`: T-Spin Mini/Full, Perfect Clear, soft/hard drop 점수, B2B
 - `leaderboard.js`: `LEADERBOARD_GENERATION = 2` — 예전 배열·다른 generation 기록은 로드 시 초기화
 - `renderer.js`: Next 5 스택 렌더, 라인 플래시 splice 안전 처리
@@ -25,13 +25,15 @@ Wave A Guideline 코어를 반영했다. 모든 모드가 SRS 회전, DAS/ARR, �
 
 - 시작 메뉴·일시정지에서 Settings를 연다.
 - DAS 50–400ms, ARR 0–100ms(0은 infinite ARR), Lock 100–1000ms.
+- 일시정지 중 타이밍/바인딩을 바꿔도 활성 락 타이머·리셋 횟수는 유지한다(`applyLiveSettings`는 `lockDelay`만 갱신).
+- 리바인드 충돌 시 대상 액션은 `[code]`만 갖고, 기존 소유 액션은 대상이 갖고 있던 키를 받는다(스왑).
 - 모달 포커스 트랩과 Escape 닫기를 적용한다. 배경 클릭으로는 닫지 않는다.
 - Pulse Amp 문구는 positive attack(`attack > 0`)에만 보내는 Garbage +1줄로 README와 구현을 맞췄다.
 
 ## 검증
 
-- Playwright: Next 5 데이터/캔버스, 소프트 드롭 홀드 점수 경로, 설정 리바인드·타이밍 리로드 유지, 포커스 트랩/Escape, 레거시 리더보드 wipe, `?test=1` 게이트, 기존 Marathon/Sprint/Versus/Circuit 스모크
-- 최종 검증: `npm test` — Node 유닛 101개 통과, Playwright 브라우저 회귀 전체 통과
+- Playwright: Next 5 데이터/캔버스, 소프트 드롭 홀드 점수 경로, pause+settings DAS 변경 시 활성 락 유지, 설정 리바인드·타이밍 리로드 유지, 포커스 트랩/Escape, 레거시 리더보드 wipe, `?test=1` 게이트, 기존 Marathon/Sprint/Versus/Circuit 스모크
+- 최종 검증: `npm test` — Node 유닛·Playwright 브라우저 회귀 통과(락 보존·키 스왑 포함)
 
 ## 관련 문서
 

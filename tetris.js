@@ -288,8 +288,14 @@ function applyLiveSettings(next = settings) {
     settings = normalizeSettings(next);
     inputController.setTiming(settings.timing);
     player.lockDelay = settings.timing.lockDelay;
-    lockState = createLockState(settings.timing.lockDelay);
-    player.lockTimer = 0;
+    if (lockState.active) {
+        // Keep active lock timer/resets; only adopt the new delay for future resets.
+        lockState = {...lockState, lockDelay: settings.timing.lockDelay};
+        player.lockTimer = lockState.timer;
+    } else {
+        lockState = createLockState(settings.timing.lockDelay);
+        player.lockTimer = 0;
+    }
 }
 
 function readScenarioProgress() {
@@ -1688,6 +1694,7 @@ const exposed = {
     queueGarbageForOpponent, queueGarbageForPlayer, runOpponentTurn, runOpponentTurnsAfterLock,
     checkSprintCompletion, showHighScoreModal, showStartScreen, showPauseScreen, exitApplication,
     showSettings, closeSettings, syncSettingsUI, trapFocus,
+    createLockState, onGroundContact, tickLock, clearLock,
     togglePause, quitGame, returnToMenu, selectGameMode, canAcceptGameInput, update, formatElapsedTime,
     createScenarioProgress, readScenarioProgress, writeScenarioProgress, renderScenarioMap,
     showScenarioMap, showScenarioBriefing, startScenarioStage, canPlayScenarioStage,

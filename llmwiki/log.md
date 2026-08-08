@@ -29,4 +29,5 @@
 - Next 5, 소프트 드롭 홀드, Settings 리바인드·타이밍 유지, 포커스 트랩/Escape, 레거시 리더보드 wipe, `?test=1` 게이트를 회귀에 포함했다.
 - README에 Guideline 조작, Settings, Next 5, T-Spin/PC, 리더보드 generation, Pulse Amp positive attack, DAS/ARR·소프트 드롭 홀드를 반영했다.
 - `npm test`: Node 유닛 테스트 101개 통과, Playwright 브라우저 회귀 전체 통과.
+- final-review P1/P2: `applyLiveSettings`가 활성 락을 초기화하지 않도록 수정, `assignBinding`이 충돌 키를 스왑하도록 수정, Playwright·유닛 회귀 추가.
 - 상세 내용: [[guideline-core-2026-08-08]]

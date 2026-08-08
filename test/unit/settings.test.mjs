@@ -28,10 +28,14 @@ test('applyPreset guideline overwrites bindings', () => {
 
 test('assignBinding swaps on conflict', () => {
     let s = normalizeSettings({});
-    const key = s.bindings.pause[0];
+    const formerHold = [...s.bindings.hold];
+    const key = s.bindings.pause[0]; // KeyP
     s = assignBinding(s, 'hold', key);
-    assert.ok(s.bindings.hold.includes(key));
+    assert.deepEqual(s.bindings.hold, [key]);
+    assert.deepEqual(s.bindings.pause, formerHold);
+    assert.ok(s.bindings.pause.includes('KeyC'));
     assert.ok(!s.bindings.pause.includes(key));
+    assert.equal(s.preset, 'custom');
 });
 
 test('readLeaderboard clears foreign generation', () => {
