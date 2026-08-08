@@ -267,6 +267,90 @@
         .campaign-card small { color: var(--hud-muted); font-size: 11px; }
         .menu-secondary-actions { display: flex; gap: 8px; justify-content: center; }
         .modal .menu-secondary-actions button { flex: 1; }
+        #settings-screen {
+            width: min(calc(100% - 32px), 420px);
+            max-height: min(90vh, 720px);
+            overflow-y: auto;
+            text-align: left;
+        }
+        #settings-screen h2 { text-align: center; }
+        #settings-screen fieldset {
+            margin: 0 0 14px;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 8px;
+        }
+        #settings-screen legend {
+            color: #f1c40f;
+            font-size: 12px;
+            letter-spacing: 0.12em;
+            padding: 0 6px;
+        }
+        .settings-presets {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            color: #d6e7f5;
+            font-size: 14px;
+        }
+        .settings-presets label { cursor: pointer; }
+        .settings-bindings {
+            display: grid;
+            gap: 8px;
+            margin: 0 0 14px;
+        }
+        .settings-binding-row {
+            display: grid;
+            grid-template-columns: 1fr minmax(120px, 1.2fr);
+            gap: 8px;
+            align-items: center;
+        }
+        .settings-binding-row span {
+            color: #c4ced7;
+            font-size: 13px;
+        }
+        .modal .settings-binding-row button {
+            width: 100%;
+            padding: 8px 10px;
+            font-size: 13px;
+            background: rgba(10, 18, 28, 0.85);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .modal .settings-binding-row button:hover {
+            background: rgba(241, 196, 15, 0.16);
+            border-color: #f1c40f;
+        }
+        .modal .settings-binding-row button[aria-pressed="true"] {
+            border-color: #f1c40f;
+            box-shadow: inset 0 0 0 1px rgba(241, 196, 15, 0.45);
+            color: #f1c40f;
+        }
+        .settings-timing {
+            display: grid;
+            gap: 12px;
+            margin: 0 0 16px;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 8px;
+        }
+        .settings-timing label {
+            display: grid;
+            grid-template-columns: 88px 1fr 48px;
+            gap: 8px;
+            align-items: center;
+            color: #d6e7f5;
+            font-size: 13px;
+        }
+        .settings-timing input[type="range"] { width: 100%; }
+        .settings-timing output {
+            color: #f1c40f;
+            font-weight: 700;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+        #settings-screen .scenario-actions { justify-content: stretch; }
+        #settings-screen .scenario-actions button { flex: 1; }
         #scenario-map-screen { width: min(calc(100% - 32px), 620px); }
         #scenario-stage-list {
             display: grid;
@@ -826,6 +910,7 @@
             <h2 id="pause-screen-title">PAUSED</h2>
             <p style="color: #aaa; margin-bottom: 20px;">Take a breath!</p>
             <button id="resume-game-btn">Resume Game</button>
+            <button id="pause-settings-btn" type="button" style="background: #3498db; margin-left: 10px;">Settings</button>
             <button id="quit-to-menu-btn" style="background: #e74c3c; margin-left: 10px;">Quit to Menu</button>
         </div>
 
@@ -850,8 +935,41 @@
             </div>
             <button id="start-game-btn">Start Game</button>
             <div class="menu-secondary-actions">
+                <button id="menu-settings-btn" type="button" style="background: #3498db;">Settings</button>
                 <button id="view-leaderboard-btn" type="button" style="background: #3498db;">Leaderboard</button>
                 <button id="menu-exit-btn" class="btn-exit" type="button" aria-label="Exit Game">Exit Game</button>
+            </div>
+        </div>
+
+        <div id="settings-screen" class="modal" style="display: none;" aria-labelledby="settings-screen-title">
+            <h2 id="settings-screen-title">SETTINGS</h2>
+            <fieldset>
+                <legend>PRESET</legend>
+                <div class="settings-presets" role="radiogroup" aria-label="Control preset">
+                    <label><input type="radio" name="control-preset" id="preset-classic" value="classic"> Classic</label>
+                    <label><input type="radio" name="control-preset" id="preset-guideline" value="guideline"> Guideline</label>
+                </div>
+            </fieldset>
+            <div class="settings-bindings" role="group" aria-label="Key bindings">
+                <div class="settings-binding-row"><span>Move Left</span><button type="button" data-rebind="moveLeft">ArrowLeft</button></div>
+                <div class="settings-binding-row"><span>Move Right</span><button type="button" data-rebind="moveRight">ArrowRight</button></div>
+                <div class="settings-binding-row"><span>Soft Drop</span><button type="button" data-rebind="softDrop">ArrowDown</button></div>
+                <div class="settings-binding-row"><span>Hard Drop</span><button type="button" data-rebind="hardDrop">Space</button></div>
+                <div class="settings-binding-row"><span>Rotate CW</span><button type="button" data-rebind="rotateCW">ArrowUp</button></div>
+                <div class="settings-binding-row"><span>Rotate CCW</span><button type="button" data-rebind="rotateCCW">—</button></div>
+                <div class="settings-binding-row"><span>Rotate 180</span><button type="button" data-rebind="rotate180">—</button></div>
+                <div class="settings-binding-row"><span>Hold</span><button type="button" data-rebind="hold">KeyC</button></div>
+                <div class="settings-binding-row"><span>Pause</span><button type="button" data-rebind="pause">KeyP, Escape</button></div>
+                <div class="settings-binding-row"><span>Quit</span><button type="button" data-rebind="quit">KeyQ</button></div>
+            </div>
+            <div class="settings-timing">
+                <label for="settings-das">DAS <input type="range" id="settings-das" min="50" max="400" step="1" value="167"> <output id="settings-das-value" for="settings-das">167</output></label>
+                <label for="settings-arr">ARR <input type="range" id="settings-arr" min="0" max="100" step="1" value="33"> <output id="settings-arr-value" for="settings-arr">33</output></label>
+                <label for="settings-lock-delay">Lock <input type="range" id="settings-lock-delay" min="100" max="1000" step="1" value="500"> <output id="settings-lock-delay-value" for="settings-lock-delay">500</output></label>
+            </div>
+            <div class="scenario-actions">
+                <button id="settings-reset-btn" type="button" style="background: #95a5a6;">Reset Controls</button>
+                <button id="settings-back-btn" type="button">Back</button>
             </div>
         </div>
 

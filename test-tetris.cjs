@@ -151,6 +151,39 @@ async function testPreferencePersistence(browser, url) {
   await page.close();
 }
 
+async function testSettingsEscapeClose(browser, url) {
+  const { page, pageErrors } = await openPage(browser, url);
+
+  await page.locator('#menu-settings-btn').click();
+  assert.deepEqual(await page.evaluate(() => ({
+    settingsVisible: getComputedStyle(settingsScreen).display !== 'none',
+    startVisible: getComputedStyle(startScreen).display !== 'none',
+    labelledBy: modalOverlay.getAttribute('aria-labelledby'),
+    focused: document.activeElement?.id,
+  })), {
+    settingsVisible: true,
+    startVisible: false,
+    labelledBy: 'settings-screen-title',
+    focused: 'settings-back-btn',
+  }, 'Settings must open from the start menu');
+
+  await page.keyboard.press('Escape');
+  assert.deepEqual(await page.evaluate(() => ({
+    settingsVisible: getComputedStyle(settingsScreen).display !== 'none',
+    startVisible: getComputedStyle(startScreen).display !== 'none',
+    labelledBy: modalOverlay.getAttribute('aria-labelledby'),
+    focused: document.activeElement?.id,
+  })), {
+    settingsVisible: false,
+    startVisible: true,
+    labelledBy: 'start-screen-title',
+    focused: 'menu-settings-btn',
+  }, 'Escape must close Settings and return to the start menu');
+
+  assert.equal(pageErrors.length, 0, 'settings open/close must not throw');
+  await page.close();
+}
+
 async function testScenarioMap(browser, url) {
   const { page, pageErrors } = await openPage(browser, url);
   await page.evaluate(() => localStorage.removeItem('neonDropScenario'));
@@ -2241,6 +2274,7 @@ async function testUsabilityUI(browser, url) {
     await testTerminalExitAudio(browser, url);
     await testShortLandscapeMenu(browser, url);
     await testModalAccessibility(browser, url);
+    await testSettingsEscapeClose(browser, url);
     await testPreferencePersistence(browser, url);
     await testScenarioMap(browser, url);
     await testScenarioMapNavigation(browser, url);

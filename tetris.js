@@ -53,6 +53,8 @@ import { createInputController } from './src/js/input.js';
 import {
     normalizeSettings,
     DEFAULT_SETTINGS,
+    applyPreset,
+    assignBinding,
 } from './src/js/settings.js';
 
 const canvas = document.getElementById('tetris');
@@ -115,7 +117,21 @@ const leaderboardList = document.getElementById('leaderboard-list');
 const exitGameBtn = document.getElementById('exit-game-btn');
 const pauseScreen = document.getElementById('pause-screen');
 const resumeGameBtn = document.getElementById('resume-game-btn');
+const pauseSettingsBtn = document.getElementById('pause-settings-btn');
 const quitToMenuBtn = document.getElementById('quit-to-menu-btn');
+const settingsScreen = document.getElementById('settings-screen');
+const menuSettingsBtn = document.getElementById('menu-settings-btn');
+const settingsBackBtn = document.getElementById('settings-back-btn');
+const settingsResetBtn = document.getElementById('settings-reset-btn');
+const presetClassicRadio = document.getElementById('preset-classic');
+const presetGuidelineRadio = document.getElementById('preset-guideline');
+const settingsDas = document.getElementById('settings-das');
+const settingsArr = document.getElementById('settings-arr');
+const settingsLockDelay = document.getElementById('settings-lock-delay');
+const settingsDasValue = document.getElementById('settings-das-value');
+const settingsArrValue = document.getElementById('settings-arr-value');
+const settingsLockDelayValue = document.getElementById('settings-lock-delay-value');
+const rebindButtons = [...document.querySelectorAll('[data-rebind]')];
 const gameModeSelect = document.getElementById('game-mode');
 const modeElement = document.getElementById('mode');
 const timerElement = document.getElementById('timer');
@@ -177,6 +193,9 @@ let scenarioResolved = false;
 
 let isGameOver = false;
 let isPaused = false;
+let previousFocus = null;
+let settingsReturnScreen = 'start';
+let rebindingAction = null;
 
 let settings = normalizeSettings(DEFAULT_SETTINGS);
 const pieceQueue = createPieceQueue();
@@ -302,6 +321,11 @@ function restorePreferences() {
 }
 
 function openModal(labelId, focusTarget) {
+    if (modalOverlay.style.display !== 'flex') {
+        previousFocus = document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null;
+    }
     modalOverlay.style.display = 'flex';
     modalOverlay.setAttribute('aria-labelledby', labelId);
     gameContainer.inert = true;
@@ -309,10 +333,102 @@ function openModal(labelId, focusTarget) {
     focusTarget.focus();
 }
 
+function restorePreviousFocus() {
+    const target = previousFocus;
+    previousFocus = null;
+    if (
+        target &&
+        typeof target.focus === 'function' &&
+        target.isConnected &&
+        target.offsetParent !== null
+    ) {
+        target.focus();
+    }
+}
+
 function closeModal() {
     modalOverlay.style.display = 'none';
     gameContainer.inert = false;
     touchControls.inert = false;
+    restorePreviousFocus();
+}
+
+function trapFocus(container, event) {
+    if (event.key !== 'Tab') return;
+    const nodes = [...container.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    )].filter(n => !n.disabled && n.offsetParent !== null);
+    if (nodes.length === 0) return;
+    const first = nodes[0];
+    const last = nodes[nodes.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
+}
+
+function settingsScreenOpen() {
+    return settingsScreen.style.display !== 'none';
+}
+
+function bindingLabel(codes) {
+    return codes.length ? codes.join(', ') : '—';
+}
+
+function cancelRebind() {
+    rebindingAction = null;
+    rebindButtons.forEach(button => {
+        button.setAttribute('aria-pressed', 'false');
+    });
+}
+
+function syncSettingsUI() {
+    presetClassicRadio.checked = settings.preset === 'classic';
+    presetGuidelineRadio.checked = settings.preset === 'guideline';
+    settingsDas.value = String(settings.timing.das);
+    settingsArr.value = String(settings.timing.arr);
+    settingsLockDelay.value = String(settings.timing.lockDelay);
+    settingsDasValue.textContent = String(settings.timing.das);
+    settingsArrValue.textContent = String(settings.timing.arr);
+    settingsLockDelayValue.textContent = String(settings.timing.lockDelay);
+    rebindButtons.forEach(button => {
+        const action = button.dataset.rebind;
+        const capturing = rebindingAction === action;
+        button.setAttribute('aria-pressed', String(capturing));
+        button.textContent = capturing
+            ? 'Press a key…'
+            : bindingLabel(settings.bindings[action] ?? []);
+    });
+}
+
+function persistSettings(next = settings) {
+    applyLiveSettings(next);
+    syncSettingsUI();
+    writePreferences();
+}
+
+function showSettings(returnScreen = 'start') {
+    settingsReturnScreen = returnScreen;
+    cancelRebind();
+    hideModalScreens();
+    settingsScreen.style.display = 'block';
+    syncSettingsUI();
+    openModal('settings-screen-title', settingsBackBtn);
+}
+
+function closeSettings() {
+    cancelRebind();
+    hideModalScreens();
+    if (settingsReturnScreen === 'pause') {
+        pauseScreen.style.display = 'block';
+        openModal('pause-screen-title', pauseSettingsBtn);
+        return;
+    }
+    startScreen.style.display = 'block';
+    openModal('start-screen-title', menuSettingsBtn);
 }
 
 const scenarioCopy = {
@@ -338,6 +454,7 @@ const scenarioCopy = {
 function hideModalScreens() {
     startScreen.style.display = 'none';
     pauseScreen.style.display = 'none';
+    settingsScreen.style.display = 'none';
     gameOverScreen.style.display = 'none';
     leaderboardScreen.style.display = 'none';
     exitScreen.style.display = 'none';
@@ -1113,6 +1230,7 @@ function exitApplication() {
 function showPauseScreen() {
     touchControls.hidden = true;
     startScreen.style.display = 'none';
+    settingsScreen.style.display = 'none';
     gameOverScreen.style.display = 'none';
     leaderboardScreen.style.display = 'none';
     pauseScreen.style.display = 'block';
@@ -1287,6 +1405,68 @@ quitToMenuBtn.addEventListener('click', () => {
     returnToMenu();
 });
 
+menuSettingsBtn.addEventListener('click', () => showSettings('start'));
+pauseSettingsBtn.addEventListener('click', () => showSettings('pause'));
+settingsBackBtn.addEventListener('click', closeSettings);
+
+settingsResetBtn.addEventListener('click', () => {
+    const preset = presetGuidelineRadio.checked ? 'guideline' : 'classic';
+    cancelRebind();
+    persistSettings(applyPreset(settings, preset));
+});
+
+presetClassicRadio.addEventListener('change', () => {
+    if (!presetClassicRadio.checked) return;
+    cancelRebind();
+    persistSettings(applyPreset(settings, 'classic'));
+});
+
+presetGuidelineRadio.addEventListener('change', () => {
+    if (!presetGuidelineRadio.checked) return;
+    cancelRebind();
+    persistSettings(applyPreset(settings, 'guideline'));
+});
+
+function updateTimingFromSliders() {
+    persistSettings({
+        ...settings,
+        timing: {
+            das: Number(settingsDas.value),
+            arr: Number(settingsArr.value),
+            lockDelay: Number(settingsLockDelay.value),
+        },
+    });
+}
+
+settingsDas.addEventListener('input', updateTimingFromSliders);
+settingsArr.addEventListener('input', updateTimingFromSliders);
+settingsLockDelay.addEventListener('input', updateTimingFromSliders);
+
+rebindButtons.forEach(button => {
+    button.addEventListener('click', () => {
+        const action = button.dataset.rebind;
+        if (rebindingAction === action) {
+            cancelRebind();
+            syncSettingsUI();
+            return;
+        }
+        rebindingAction = action;
+        syncSettingsUI();
+    });
+});
+
+modalOverlay.addEventListener('keydown', event => {
+    if (event.key === 'Tab') {
+        trapFocus(modalOverlay, event);
+        return;
+    }
+    if (event.key === 'Escape' && settingsScreenOpen() && !rebindingAction) {
+        event.preventDefault();
+        event.stopPropagation();
+        closeSettings();
+    }
+});
+
 function emitMatchEvent(type, payload = {}) {
     if (!opponentPlayActive()) return;
     matchEventLog.push({type, ...payload});
@@ -1416,6 +1596,17 @@ function togglePause() {
 }
 
 document.addEventListener('keydown', event => {
+    if (rebindingAction) {
+        event.preventDefault();
+        if (event.repeat) return;
+        const action = rebindingAction;
+        cancelRebind();
+        persistSettings(assignBinding(settings, action, event.code));
+        return;
+    }
+
+    if (settingsScreenOpen()) return;
+
     if (isEditableTarget(event.target)) return;
 
     if (audioCtx && audioCtx.state === 'suspended' && player.matrix && !isGameOver) {
@@ -1484,7 +1675,7 @@ exitGameBtn.addEventListener('click', quitGame);
 //Expose state and functions to Playwright tests that rely on global scope.
 const exposed = {
     arena, player, opponent, pieceQueue, inputController,
-    gameOverTitleElement, gameOverScreen, startScreen, pauseScreen, modalOverlay,
+    gameOverTitleElement, gameOverScreen, startScreen, pauseScreen, settingsScreen, modalOverlay,
     calculateGarbageAttack, scoreLines, createPiece, createMatrix,
     chooseOpponentMove, evaluateOpponentBoard, nextPieceType, initialRotationFor,
     detectTSpin, isPerfectClear, tryRotateSrs,
@@ -1496,6 +1687,7 @@ const exposed = {
     playerRotate, playerDrop, playerHardDrop, lockPiece, lockCurrentPiece,
     queueGarbageForOpponent, queueGarbageForPlayer, runOpponentTurn, runOpponentTurnsAfterLock,
     checkSprintCompletion, showHighScoreModal, showStartScreen, showPauseScreen, exitApplication,
+    showSettings, closeSettings, syncSettingsUI, trapFocus,
     togglePause, quitGame, returnToMenu, selectGameMode, canAcceptGameInput, update, formatElapsedTime,
     createScenarioProgress, readScenarioProgress, writeScenarioProgress, renderScenarioMap,
     showScenarioMap, showScenarioBriefing, startScenarioStage, canPlayScenarioStage,
