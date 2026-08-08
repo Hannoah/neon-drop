@@ -1,7 +1,6 @@
 // Neon Drop — original falling-block game.
-// Piece identifiers use neutral letters distinct from the Tetris Company's
-// protected naming. All gameplay terminology (Quad Clear, Pivot, B2B) is
-// original wording; do not reintroduce protected terms here.
+// Piece identifiers use neutral letters (A–S). Wave A scoring event labels
+// follow Guideline-style copy (TETRIS, T-SPIN, …) approved in the design.
 
 export const PIECE_TYPES = 'ABCDEFS';
 export const SPRINT_TARGET_LINES = 40;
@@ -71,6 +70,12 @@ export const PIECE_SHAPES = {
 };
 
 export const NORMAL_LINE_SCORES = [0, 100, 300, 500, 800];
-export const PIVOT_LINE_SCORES    = [400, 800, 1200, 1600];
+export const PIVOT_LINE_SCORES    = [400, 800, 1200, 1600]; // legacy alias of full T-Spin
 export const NORMAL_GARBAGE_SCORES = [0, 0, 1, 2, 4];
 export const PIVOT_GARBAGE_SCORES   = [0, 2, 4, 6];
+
+// Guideline-style score tables (lines cleared indexes the arrays).
+export const TSPIN_LINE_SCORES = {mini: [100, 200, 400], full: [400, 800, 1200, 1600]};
+export const PERFECT_CLEAR_BONUS = [0, 800, 1200, 1800, 2000];
+export const SOFT_DROP_POINT = 1;
+export const HARD_DROP_POINT = 2;
