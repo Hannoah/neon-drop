@@ -1,23 +1,36 @@
+export const LEADERBOARD_GENERATION = 2;
+export const LEADERBOARD_KEY = 'tetrisLeaderboard';
+
 export function readLeaderboard(storage = localStorage) {
     try {
-        const stored = storage.getItem('tetrisLeaderboard');
-        const scores = stored ? JSON.parse(stored) : [];
-        if (!Array.isArray(scores)) return [];
-
-        return scores
+        const stored = storage.getItem(LEADERBOARD_KEY);
+        if (!stored) return [];
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+            writeLeaderboard([], storage);
+            return [];
+        }
+        if (!parsed || parsed.generation !== LEADERBOARD_GENERATION || !Array.isArray(parsed.scores)) {
+            writeLeaderboard([], storage);
+            return [];
+        }
+        return parsed.scores
             .filter(score => score && typeof score.name === 'string' && Number.isFinite(score.score))
             .map(score => ({name: score.name, score: score.score}))
             .sort((a, b) => b.score - a.score)
             .slice(0, 5);
-    } catch (error) {
+    } catch {
         return [];
     }
 }
 
 export function writeLeaderboard(scores, storage = localStorage) {
     try {
-        storage.setItem('tetrisLeaderboard', JSON.stringify(scores));
-    } catch (error) {
+        storage.setItem(LEADERBOARD_KEY, JSON.stringify({
+            generation: LEADERBOARD_GENERATION,
+            scores,
+        }));
+    } catch {
         // Storage can be unavailable in private browsing or restricted contexts.
     }
 }

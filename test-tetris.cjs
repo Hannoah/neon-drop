@@ -249,7 +249,10 @@ async function testScenarioMap(browser, url) {
     };
     localStorage.setItem('neonDropScenario', JSON.stringify(progress));
     localStorage.setItem('neonDropPreferences', '{"mode":"sprint","bgm":false,"sfx":true}');
-    localStorage.setItem('tetrisLeaderboard', '[{"name":"KEEP","score":77}]');
+    localStorage.setItem('tetrisLeaderboard', JSON.stringify({
+      generation: 2,
+      scores: [{name: 'KEEP', score: 77}],
+    }));
     return {
       preferences: localStorage.getItem('neonDropPreferences'),
       leaderboard: localStorage.getItem('tetrisLeaderboard'),
@@ -1615,7 +1618,10 @@ async function testLeaderboardSafety(browser, url) {
 
   await page.evaluate(() => localStorage.setItem(
     'tetrisLeaderboard',
-    JSON.stringify([{ name: '<b>name</b>', score: 100 }]),
+    JSON.stringify({
+      generation: 2,
+      scores: [{ name: '<b>name</b>', score: 100 }],
+    }),
   ));
   await page.reload();
   const leaderboard = await page.locator('#leaderboard').evaluate(element => ({
@@ -1639,7 +1645,8 @@ async function testScoreSave(browser, url) {
   await page.getByRole('button', { name: 'Save Score' }).click();
 
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('tetrisLeaderboard')));
-  assert.deepEqual(saved[0], { name: 'AI_Agent', score: 321 });
+  assert.equal(saved.generation, 2);
+  assert.deepEqual(saved.scores[0], { name: 'AI_Agent', score: 321 });
   assert.equal(await page.locator('#start-screen').isVisible(), true, 'saving a score returns to the menu');
   assert.equal(pageErrors.length, 0, 'score saving must not throw');
   await page.close();
