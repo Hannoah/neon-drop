@@ -88,16 +88,34 @@ export function createRenderer({
         context.globalAlpha = 1.0;
     }
 
-    function drawNext() {
+    function drawNext(previewMatrices) {
         nextContext.fillStyle = '#000';
         nextContext.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
 
-        const {player} = getState();
-        const offset = {
-            x: (nextCanvas.width / 20 - player.next.length) / 2,
-            y: (nextCanvas.height / 20 - player.next.length) / 2
-        };
-        drawMatrix(player.next, offset, nextContext);
+        let matrices = previewMatrices;
+        if (!matrices || matrices.length === 0) {
+            const {player} = getState();
+            matrices = player.next ? [player.next] : [];
+        }
+
+        const logicalW = nextCanvas.width / 20;
+        const logicalH = nextCanvas.height / 20;
+        const count = matrices.length;
+        if (count === 0) return;
+
+        const gap = 0.12;
+        const slotStep = logicalH / count;
+
+        matrices.forEach((matrix, index) => {
+            if (!matrix?.length) return;
+            const pieceW = matrix[0].length;
+            const pieceH = matrix.length;
+            const offset = {
+                x: (logicalW - pieceW) / 2,
+                y: index * slotStep + (slotStep - pieceH - gap) / 2 + gap / 2,
+            };
+            drawMatrix(matrix, offset, nextContext);
+        });
     }
 
     function drawHold() {

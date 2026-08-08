@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createMatrix } from '../../src/js/board.js';
+import { createMatrix, createPiece } from '../../src/js/board.js';
 import { createRenderer, expireFlashingLines } from '../../src/js/renderer.js';
 
 function fakeContext() {
@@ -94,6 +94,23 @@ test('renderer draws an active opponent without depending on game mode', () => {
     renderer.drawOpponent();
 
     assert.ok(opponentContext.fillRectCount > 1, 'the opponent piece should be drawn after the clear');
+});
+
+test('drawNext stacks every preview matrix in separate slots', () => {
+    const nextContext = countingContext();
+    const preview = ['A', 'B', 'C', 'D', 'S'].map(type => createPiece(type));
+    const renderer = createRenderer({
+        canvas: {width: 2, height: 4}, context: fakeContext(),
+        nextCanvas: {width: 80, height: 400}, nextContext,
+        holdCanvas: {width: 2, height: 2}, holdContext: fakeContext(),
+        opponentCanvas: {width: 2, height: 4}, opponentContext: fakeContext(),
+        VERSUS_WIDTH: 2, VERSUS_HEIGHT: 4,
+        getState: () => ({player: {next: preview[0]}}),
+    });
+
+    renderer.drawNext(preview);
+
+    assert.ok(nextContext.fillRectCount > preview.length, 'each preview piece should be drawn after the clear');
 });
 
 test('expireFlashingLines removes every expired entry in one pass', () => {

@@ -469,6 +469,10 @@ function syncPlayerNextPreview() {
     player.next = preview.length ? createPiece(preview[0]) : null;
 }
 
+function nextPreviewMatrices() {
+    return pieceQueue.preview(5).map(type => createPiece(type)).filter(Boolean);
+}
+
 function actionForCode(code) {
     for (const [action, codes] of Object.entries(settings.bindings)) {
         if (codes.includes(code)) return action;
@@ -814,7 +818,7 @@ function playerReset() {
             showHighScoreModal();
         }
     }
-    drawNext();
+    drawNext(nextPreviewMatrices());
 }
 
 function playerRotate(dir) {
@@ -874,7 +878,7 @@ function update(time = 0) {
     updateScore();
     draw();
     drawOpponent();
-    drawNext();
+    drawNext(nextPreviewMatrices());
     drawHold();
     scheduleUpdate();
 }
