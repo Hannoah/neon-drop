@@ -850,10 +850,15 @@ function updateScenarioState(deltaTime) {
     }
     if (!activeScenarioStage.hazardIntervalMs) return;
     scenarioHazardTimer -= deltaTime;
-    if (scenarioHazardTimer <= 0) {
+    let waves = 0;
+    while (scenarioHazardTimer <= 0 && waves < 3) {
         queueGarbageForPlayer(1);
         scenarioHazardTimer += activeScenarioStage.hazardIntervalMs;
-        lastEventMessage = 'INTERFERENCE +1';
+        waves++;
+    }
+    if (scenarioHazardTimer < 0) scenarioHazardTimer = 0;
+    if (waves > 0) {
+        lastEventMessage = waves === 1 ? 'INTERFERENCE +1' : `INTERFERENCE +${waves}`;
         eventMessageTimer = 2000;
         updateScore();
     }

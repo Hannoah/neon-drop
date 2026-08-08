@@ -688,9 +688,9 @@ async function testScenarioLineStages(browser, url) {
     paused: {timer: 30000, pending: 0},
     queued: {timer: 29750, pending: 1, event: 'INTERFERENCE +1', eventTimer: 2000},
     applied: {pending: 0, garbageLines: 11},
-    hugeDelta: {timer: -59000, pending: 1},
+    hugeDelta: {timer: 1000, pending: 3},
     marathonPending: 0,
-  }, 'stage 3 interference must queue once, pause cleanly, and apply between pieces');
+  }, 'stage 3 interference must queue once, pause cleanly, cap huge catch-up at 3 waves');
 
   const overload = await page.evaluate(() => {
     gameMode = 'scenario';
