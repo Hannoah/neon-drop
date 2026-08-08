@@ -2,6 +2,8 @@
 
 브라우저에서 실행하는 Vanilla JavaScript Tetris입니다. Guideline급 조작(SRS, DAS/ARR, 락 딜레이, 홀드 소프트 드롭), Next 5, T-Spin/Perfect Clear 점수, 설정 화면을 지원합니다.
 
+UI는 **Theater Ink** 방향입니다: DM Sans, 잉크 대비 토큰(`#0e1014` / `#161a22` / `#2a2f3a` / `#f5f7fa` / `#8b93a7` / accent `#5eead4`), 보드 중앙·Hold/Next 좌측·점수 우측 Theater 레이아웃, 글로우 없는 플랫 크롬.
+
 ## 실행과 테스트
 
 ```bash
@@ -57,12 +59,13 @@ Guideline 프리셋은 회전에 `Z`/`X`(및 `↑` CW)를 쓰도록 바인딩을
 - Classic / Guideline 컨트롤 프리셋
 - 키 리바인드 (액션별 키 캡처; 충돌 시 기존 바인딩과 교체)
 - DAS (50–400ms), ARR (0–100ms), Lock delay (100–1000ms)
+- BGM / SFX 토글 (헤더 Sound 메뉴 대신 Settings에 통합)
 
 값은 `neonDropPreferences`(version 2)에 저장되며 새로고침 후에도 유지됩니다. Settings는 포커스 트랩이 적용되고 `Esc`로 닫힙니다.
 
 ## Next 5 · 점수
 
-- 우측 **NEXT** 레일은 다음 피스 5개를 미리 보여 줍니다 (7-bag 큐).
+- 좌측 **NEXT** 레일은 다음 피스 5개를 미리 보여 줍니다 (7-bag 큐). Hold는 그 위입니다.
 - T-Spin Mini/Full과 Perfect Clear 보너스를 Guideline 스타일로 계산합니다.
   - 예: soft drop +1/칸, hard drop +2/칸, PC 보너스 라인 수별 800–2000×레벨
   - B2B는 Tetris(4라인) 또는 라인을 지운 T-Spin에서 이어집니다.

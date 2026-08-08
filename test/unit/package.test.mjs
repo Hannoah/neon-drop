@@ -20,3 +20,13 @@ test('shows touch controls for coarse pointers', async () => {
 
     assert.match(html, /@media \(max-width: 760px\), \(orientation: portrait\), \(pointer: coarse\)/);
 });
+
+test('declares Theater Ink tokens and DM Sans', async () => {
+    const html = await readFile(new URL('../../index.html', import.meta.url), 'utf8');
+
+    assert.match(html, /family=DM\+Sans/);
+    assert.match(html, /--bg:\s*#0e1014/);
+    assert.match(html, /--accent:\s*#5eead4/);
+    assert.match(html, /id="start-game-btn"[^>]*>Play</);
+    assert.match(html, /grid-template-areas:[\s\S]*preview player rail/);
+});

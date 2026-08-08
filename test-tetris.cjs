@@ -45,7 +45,7 @@ async function testInputGuards(browser, url) {
   assert.equal(await page.evaluate(() => player.matrix), null, 'menu input must not start gameplay');
   assert.equal(pageErrors.length, 0, 'menu input must not throw');
 
-  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
   const bgmRunning = await page.evaluate(() => isBgmRunning());
   assert.equal(bgmRunning, true, 'starting a game must start BGM when it is enabled');
   await page.evaluate(() => document.activeElement?.blur());
@@ -126,7 +126,7 @@ async function testPreferencePersistence(browser, url) {
   const { page, pageErrors } = await openPage(browser, url);
 
   await page.locator('[data-mode-card="versus"]').click();
-  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
   await page.evaluate(() => {
     for (const id of ['bgm-toggle', 'sfx-toggle']) {
       const input = document.getElementById(id);
@@ -834,7 +834,7 @@ async function testScenarioLineStages(browser, url) {
   });
 
   await page.locator('#scenario-map-back-btn').click();
-  await page.getByRole('button', {name: 'Start Game'}).click();
+  await page.getByRole('button', { name: 'Play' }).click();
   assert.equal(await page.locator('#scenario-objective').isHidden(), true,
     'quick play must hide the campaign objective');
   assert.equal(pageErrors.length, 0, 'campaign line stages must not throw page errors');
@@ -1271,7 +1271,7 @@ async function testAnimationFrameScheduling(browser, url) {
     };
   });
 
-  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
   await page.keyboard.press('p');
   await page.keyboard.press('p');
   await page.keyboard.press('p');
@@ -1296,7 +1296,7 @@ async function testExitGame(browser, url) {
     if (frame === page.mainFrame()) mainFrameNavigations++;
   });
 
-  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
   await page.locator('#exit-game-btn').click();
   await page.waitForTimeout(100);
 
@@ -1312,8 +1312,8 @@ async function testExitGame(browser, url) {
 async function testCampaignMenuExit(browser, url) {
   const { page, pageErrors } = await openPage(browser, url);
 
-  assert.equal(await page.getByRole('button', { name: /Continue Campaign.*Neon Circuit/i }).count(), 1,
-    'the initial menu must offer Continue Campaign for Neon Circuit');
+  assert.equal(await page.getByRole('button', { name: /Circuit/i }).count(), 1,
+    'the initial menu must offer Circuit for Neon Circuit');
   assert.equal(await page.locator('#start-screen #menu-exit-btn').getAttribute('aria-label'), 'Exit Game',
     'the initial-menu Exit Game action must use its own ID');
   assert.equal(await page.evaluate(() => document.activeElement?.id), 'scenario-continue-btn',
@@ -1331,7 +1331,7 @@ async function testCampaignMenuExit(browser, url) {
     window.requestAnimationFrame = () => 4242;
     window.cancelAnimationFrame = id => window.__cancelledFrames.push(id);
   });
-  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
   assert.equal(await page.evaluate(() => isBgmRunning()), true,
     'active gameplay must have running BGM before exit');
   assert.equal(await page.evaluate(() => animationFrameId), 4242,
@@ -1357,7 +1357,7 @@ async function testCampaignMenuExit(browser, url) {
   assert.equal(await page.locator('#start-screen').isVisible(), true,
     'Return to Menu must restore the initial menu');
   assert.equal(await page.evaluate(() => document.activeElement?.id), 'scenario-continue-btn',
-    'Return to Menu must restore campaign-card focus');
+    'Return to Menu must restore Circuit button focus');
   assert.equal(pageErrors.length, 0, 'campaign menu exit must not throw');
   await page.close();
 }
@@ -1405,7 +1405,7 @@ async function testLayoutSizing(browser, url) {
   const { page, pageErrors } = await openPage(browser, url);
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.reload();
-  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
 
   const single = await page.evaluate(() => {
     const container = document.querySelector('#game-container').getBoundingClientRect();
@@ -1428,7 +1428,8 @@ async function testLayoutSizing(browser, url) {
   });
   assert.equal(single.display, 'grid', 'desktop play must use the Arena HUD grid');
   assert.equal(single.playerPanelExists, true, 'the player board needs a labelled panel');
-  assert.ok(single.areas.includes('player rail'), 'single-player must place the board beside its rail');
+  assert.ok(single.areas.includes('preview player rail'),
+    'single-player Theater layout must place preview, board, and score rail');
   assert.equal(single.playerAndRailShareRow, true);
   assert.equal(single.opponentHidden, true);
   assert.equal(single.versusCount, 1, 'the shared shell must include Versus status');
@@ -1438,7 +1439,7 @@ async function testLayoutSizing(browser, url) {
 
   await page.evaluate(() => returnToMenu());
   await page.selectOption('#game-mode', 'versus');
-  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
   const versus = await page.evaluate(() => {
     const shell = document.querySelector('#game-container');
     const container = shell.getBoundingClientRect();
@@ -1459,7 +1460,8 @@ async function testLayoutSizing(browser, url) {
     };
   });
 
-  assert.ok(versus.areas.includes('opponent versus player rail'));
+  assert.ok(versus.areas.includes('preview opponent versus player rail'),
+    'Versus Theater layout must keep Hold/Next left of the AI board');
   assert.ok(versus.containerTop >= 0 && versus.containerBottom <= versus.viewportHeight,
     `1280x720 Versus must fit inside the viewport: ${JSON.stringify(versus)}`);
   assert.equal(versus.noPageScroll, true, '1280x720 Versus must not scroll');
@@ -1498,7 +1500,7 @@ async function testResponsiveLayout(browser, url) {
   assert.ok(singlePlayerLayout.documentHeight >= singlePlayerLayout.viewportHeight, 'mobile 1P must keep content in normal scroll flow');
 
   await page.selectOption('#game-mode', 'versus');
-  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
   const versusLayout = await page.evaluate(() => {
     const container = document.querySelector('#game-container');
     const board = document.querySelector('#tetris').getBoundingClientRect();
@@ -1558,7 +1560,7 @@ async function testResponsiveLayout(browser, url) {
 
 async function testGameRules(browser, url) {
   const { page, pageErrors } = await openPage(browser, url);
-  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
 
   const topRowResult = await page.evaluate(() => {
     arena.forEach(row => row.fill(0));
@@ -1592,7 +1594,7 @@ async function testGameRules(browser, url) {
 
   const { page: versusPage, pageErrors: versusPageErrors } = await openPage(browser, url);
   await versusPage.selectOption('#game-mode', 'versus');
-  await versusPage.getByRole('button', { name: 'Start Game' }).click();
+  await versusPage.getByRole('button', { name: 'Play' }).click();
   const versusHoldCollision = await versusPage.evaluate(() => {
     arena.forEach(row => row.fill(0));
     isGameOver = false;
@@ -1660,7 +1662,7 @@ async function testGameRules(browser, url) {
 
 async function testStateReset(browser, url) {
   const { page, pageErrors } = await openPage(browser, url);
-  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
   await page.evaluate(() => {
     player.hold = createPiece('S');
     player.lockTimer = 123;
@@ -1670,7 +1672,7 @@ async function testStateReset(browser, url) {
   });
   await page.keyboard.press('p');
   await page.getByRole('button', { name: 'Quit to Menu' }).click();
-  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
 
   const state = await page.evaluate(() => ({
     hold: player.hold,
@@ -1746,7 +1748,7 @@ async function testLeaderboardSafety(browser, url) {
 
 async function testScoreSave(browser, url) {
   const { page, pageErrors } = await openPage(browser, url);
-  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
   await page.evaluate(() => {
     player.score = 321;
     showHighScoreModal();
@@ -1765,7 +1767,7 @@ async function testScoreSave(browser, url) {
 async function testGameplayEnhancements(browser, url) {
   const { page, pageErrors } = await openPage(browser, url);
 
-  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
   const hardDropShake = await page.evaluate(() => {
     arena.forEach(row => row.fill(0));
     player.matrix = createPiece('D');
@@ -1874,7 +1876,7 @@ async function testGameplayEnhancements(browser, url) {
   assert.equal(tSpinNoLine.directAttack, 0, 'a zero-line T-Spin has no base garbage attack');
 
   await page.selectOption('#game-mode', 'sprint');
-  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
   const sprint = await page.evaluate(() => {
     player.lines = 40;
     return checkSprintCompletion();
@@ -1927,7 +1929,7 @@ async function testVersusMode(browser, url) {
   assert.ok(Number.isInteger(rules.move.rotation));
 
   await page.selectOption('#game-mode', 'versus');
-  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
   const match = await page.evaluate(() => {
     const beforeOppBag = opponent.pieceBag.length;
     pieceQueue.next();
@@ -2280,7 +2282,7 @@ async function testScenarioRivalsAndUpgrades(browser, url) {
 
 async function testNextFivePreview(browser, url) {
   const { page, pageErrors } = await openPage(browser, url);
-  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
 
   const preview = await page.evaluate(() => {
     const types = pieceQueue.preview(5);
@@ -2306,7 +2308,7 @@ async function testNextFivePreview(browser, url) {
 
 async function testLockPreservedAcrossSettings(browser, url) {
   const { page, pageErrors } = await openPage(browser, url);
-  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
   await page.evaluate(() => document.activeElement?.blur());
   await page.keyboard.press('p');
   assert.equal(await page.evaluate(() => isPaused), true, 'P must open pause before settings');
@@ -2377,7 +2379,7 @@ async function testLockPreservedAcrossSettings(browser, url) {
 
 async function testSoftDropHoldPath(browser, url) {
   const { page, pageErrors } = await openPage(browser, url);
-  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.getByRole('button', { name: 'Play' }).click();
 
   await page.evaluate(() => {
     arena.forEach(row => row.fill(0));
@@ -2489,11 +2491,12 @@ async function testUsabilityUI(browser, url) {
   assert.equal(await page.locator('#mode').innerText(), 'Mode: Sprint',
     'Enter must start the selected mode from the menu');
 
-  assert.equal(await page.locator('#game-help').evaluate(element => element.open), false,
-    'control help must be collapsed until a player asks for it');
-  await page.locator('#game-help summary').click();
-  assert.equal(await page.locator('#game-help').evaluate(element => element.open), true,
-    'control help must be available as a disclosure');
+  assert.equal(await page.locator('#pause-game-btn').count(), 1,
+    'in-game header must expose a Pause control');
+  assert.equal(await page.locator('#bgm-toggle').count(), 1,
+    'BGM toggle must live in Settings');
+  assert.equal(await page.locator('#sfx-toggle').count(), 1,
+    'SFX toggle must live in Settings');
 
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.locator('#touch-controls').isVisible(), true,
