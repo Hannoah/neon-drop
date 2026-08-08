@@ -4,6 +4,8 @@ import {
     VERSUS_WIDTH,
     VERSUS_HEIGHT,
     MAX_PENDING_GARBAGE,
+    SOFT_DROP_POINT,
+    HARD_DROP_POINT,
 } from './src/js/constants.js';
 import {
     shuffleBag,
@@ -22,6 +24,8 @@ import {
     eventMessageFor,
     buildScoreResult,
     qualifiesForBackToBack,
+    detectTSpin,
+    isPerfectClear,
 } from './src/js/scoring.js';
 import { evaluateOpponentBoard, chooseOpponentMove } from './src/js/ai.js';
 import { createAudioSystem, themeMelody, themeMelodyName } from './src/js/audio.js';
@@ -36,6 +40,20 @@ import {
     starsForScenarioStage,
     scenarioUpgradeEffects,
 } from './src/js/scenario.js';
+import { createPieceQueue } from './src/js/queue.js';
+import { tryRotateSrs } from './src/js/srs.js';
+import {
+    createLockState,
+    onGroundContact,
+    onSuccessfulMove,
+    tickLock,
+    clearLock,
+} from './src/js/lock.js';
+import { createInputController } from './src/js/input.js';
+import {
+    normalizeSettings,
+    DEFAULT_SETTINGS,
+} from './src/js/settings.js';
 
 const canvas = document.getElementById('tetris');
 const context = canvas.getContext('2d');
@@ -124,7 +142,6 @@ const touchActions = {
     'touch-left': () => playerMove(-1),
     'touch-rotate': () => playerRotate(1),
     'touch-right': () => playerMove(1),
-    'touch-down': () => playerDrop(true),
     'touch-drop': () => playerHardDrop(),
     'touch-hold': () => playerHold(),
 };
@@ -145,7 +162,6 @@ let combo = 0;
 let comboTimer = 0;
 let shakeTime = 0;
 let flashingLines = [];
-let pieceBag = [];
 let gameMode = 'marathon';
 let elapsedTime = 0;
 let backToBackActive = false;
@@ -163,6 +179,14 @@ let scenarioResolved = false;
 
 let isGameOver = false;
 let isPaused = false;
+
+let settings = normalizeSettings(DEFAULT_SETTINGS);
+const pieceQueue = createPieceQueue();
+const inputController = createInputController({
+    das: settings.timing.das,
+    arr: settings.timing.arr,
+});
+let lockState = createLockState(settings.timing.lockDelay);
 
 const arena = createMatrix(12, 20);
 const opponent = {
@@ -184,12 +208,15 @@ const player = {
     matrix: null,
     next: null,
     hold: null,
+    holdRotation: 0,
     canHold: true,
     score: 0,
     level: 1,
     lines: 0,
+    rotation: 0,
+    lastRotateUsedKick: false,
     lockTimer: 0,
-    lockDelay: 500,
+    lockDelay: settings.timing.lockDelay,
 };
 
 const renderer = createRenderer({
@@ -220,23 +247,32 @@ function selectGameMode(mode) {
 
 function readPreferences() {
     try {
-        const preferences = JSON.parse(localStorage.getItem(PREFERENCES_KEY));
-        return preferences && typeof preferences === 'object' ? preferences : {};
+        return normalizeSettings(JSON.parse(localStorage.getItem(PREFERENCES_KEY)));
     } catch {
-        return {};
+        return normalizeSettings({});
     }
 }
 
 function writePreferences() {
     try {
-        localStorage.setItem(PREFERENCES_KEY, JSON.stringify({
+        settings = normalizeSettings({
+            ...settings,
             mode: gameModeSelect.value,
             bgm: bgmToggle.checked,
             sfx: sfxToggle.checked,
-        }));
+        });
+        localStorage.setItem(PREFERENCES_KEY, JSON.stringify(settings));
     } catch {
         // Preferences are optional when storage is unavailable.
     }
+}
+
+function applyLiveSettings(next = settings) {
+    settings = normalizeSettings(next);
+    inputController.setTiming(settings.timing);
+    player.lockDelay = settings.timing.lockDelay;
+    lockState = createLockState(settings.timing.lockDelay);
+    player.lockTimer = 0;
 }
 
 function readScenarioProgress() {
@@ -258,12 +294,12 @@ function writeScenarioProgress(value = scenarioProgress) {
 }
 
 function restorePreferences() {
-    const preferences = readPreferences();
-    if (['marathon', 'sprint', 'versus'].includes(preferences.mode)) {
-        gameModeSelect.value = preferences.mode;
+    applyLiveSettings(readPreferences());
+    if (['marathon', 'sprint', 'versus'].includes(settings.mode)) {
+        gameModeSelect.value = settings.mode;
     }
-    if (typeof preferences.bgm === 'boolean') bgmToggle.checked = preferences.bgm;
-    if (typeof preferences.sfx === 'boolean') sfxToggle.checked = preferences.sfx;
+    bgmToggle.checked = settings.bgm;
+    sfxToggle.checked = settings.sfx;
     selectGameMode(gameModeSelect.value);
 }
 
@@ -414,11 +450,60 @@ function returnToMenu() {
     showStartScreen();
 }
 
+/**
+ * Spawn matrices for B/C/S are not Guideline R0; align SRS rotation
+ * index to the geometry createPiece() returns.
+ * B (J-like vertical) ≡ R3, C (L-like vertical) ≡ R1, S (I vertical) ≡ R3.
+ */
+function initialRotationFor(type) {
+    if (type === 'B') return 3;
+    if (type === 'C') return 1;
+    if (type === 'S') return 3;
+    return 0;
+}
+
 function nextPieceType() {
-    if (pieceBag.length === 0) {
-        pieceBag = shuffleBag();
+    return pieceQueue.next();
+}
+
+function syncPlayerNextPreview() {
+    const preview = pieceQueue.preview(5);
+    player.next = preview.length ? createPiece(preview[0]) : null;
+}
+
+function actionForCode(code) {
+    for (const [action, codes] of Object.entries(settings.bindings)) {
+        if (codes.includes(code)) return action;
     }
-    return pieceBag.shift();
+    return null;
+}
+
+function emitHorizontal(action) {
+    if (action === 'moveLeft') playerMove(-1);
+    else if (action === 'moveRight') playerMove(1);
+}
+
+function pieceIsGrounded() {
+    if (!player.matrix) return false;
+    player.pos.y++;
+    const grounded = collide(arena, player);
+    player.pos.y--;
+    return grounded;
+}
+
+function refreshLockAfterMove() {
+    if (pieceIsGrounded()) {
+        lockState = onSuccessfulMove(lockState);
+        player.lockTimer = lockState.timer;
+    } else {
+        lockState = clearLock(lockState);
+        player.lockTimer = 0;
+    }
+}
+
+function normalizeTSpinArg(tSpinOrPivot = 'none') {
+    if (typeof tSpinOrPivot === 'boolean') return tSpinOrPivot ? 'full' : 'none';
+    return tSpinOrPivot || 'none';
 }
 
 function queueGarbageForOpponent(amount) {
@@ -462,8 +547,9 @@ function applyPendingGarbage(target, count, recipient) {
     return overflowed;
 }
 
-function scoreLines(rowCount, pivot = false) {
-    const qualifies = qualifiesForBackToBack(rowCount, pivot);
+function scoreLines(rowCount, tSpinOrPivot = 'none', perfectClear = false) {
+    const tSpin = normalizeTSpinArg(tSpinOrPivot);
+    const qualifies = qualifiesForBackToBack(rowCount, tSpin);
     const hadBackToBack = backToBackActive && qualifies;
 
     if (qualifies) {
@@ -479,24 +565,26 @@ function scoreLines(rowCount, pivot = false) {
         player.level = Math.floor(player.lines / 10) + 1;
         dropInterval = scenarioDropInterval();
         completeScenarioLineProgress(rowCount);
-    } else if (!pivot) {
+    } else if (tSpin === 'none') {
         combo = 0;
     }
 
     const {points, attack} = buildScoreResult({
-        rowCount, pivot, hadBackToBack, level: player.level, comboValue: combo,
+        rowCount, tSpin, perfectClear, hadBackToBack, level: player.level, comboValue: combo,
     });
     const upgradeEffects = gameMode === 'scenario'
         ? scenarioUpgradeEffects(scenarioProgress.upgrades) : null;
     player.score += upgradeEffects ? Math.round(points * upgradeEffects.scoreMultiplier) : points;
+    // Pulse Amp: outgoing garbage bonus only when attack > 0.
     queueGarbageForOpponent(attack > 0 ? attack + (upgradeEffects?.outgoingGarbageBonus || 0) : 0);
-    lastEventMessage = eventMessageFor(rowCount, pivot);
+    lastEventMessage = eventMessageFor(rowCount, tSpin, perfectClear);
     eventMessageTimer = 2000;
     updateScore();
     return player.score;
 }
 
-function arenaSweep(pivot = false) {
+function arenaSweep(tSpinOrPivot = 'none') {
+    const tSpin = normalizeTSpinArg(tSpinOrPivot);
     let rowCount = 0;
     outer: for (let y = arena.length - 1; y >= 0; --y) {
         for (let x = 0; x < arena[y].length; ++x) {
@@ -517,8 +605,9 @@ function arenaSweep(pivot = false) {
         if (rowCount === 4) screenShake(10);
     }
 
-    if (rowCount > 0 || pivot) {
-        scoreLines(rowCount, pivot);
+    const perfectClear = rowCount > 0 && isPerfectClear(arena);
+    if (rowCount > 0 || tSpin !== 'none') {
+        scoreLines(rowCount, tSpin, perfectClear);
     } else {
         combo = 0;
         lastEventMessage = '';
@@ -529,35 +618,17 @@ function arenaSweep(pivot = false) {
     return rowCount;
 }
 
-function isPivot() {
-    if (!lastActionWasRotate || !player.matrix || player.matrix.length !== 3) return false;
-    if (!player.matrix.some(row => row.includes(1))) return false;
-
-    const centerX = player.pos.x + 1;
-    const centerY = player.pos.y + 1;
-    const corners = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
-    const occupiedCorners = corners.filter(([x, y]) => {
-        const row = arena[centerY + y];
-        return !row || row[centerX + x] !== 0;
-    });
-    return occupiedCorners.length >= 3;
-}
-
 function playerDrop(manual = false) {
     if (manual) lastActionWasRotate = false;
     player.pos.y++;
     if (collide(arena, player)) {
         player.pos.y--;
-
-        if (player.lockTimer === 0) {
-            player.lockTimer = player.lockDelay;
-        }
-
-        if (player.lockTimer <= 0) {
-            lockPiece();
-        }
+        lockState = onGroundContact(lockState);
+        player.lockTimer = lockState.timer;
     } else {
+        lockState = clearLock(lockState);
         player.lockTimer = 0;
+        if (manual) player.score += SOFT_DROP_POINT;
     }
     dropCounter = 0;
 }
@@ -650,13 +721,20 @@ function checkSprintCompletion() {
 }
 
 function lockCurrentPiece() {
-    const pivot = isPivot();
+    const tSpin = detectTSpin({
+        arena,
+        player,
+        lastActionWasRotate,
+        usedKick: player.lastRotateUsedKick,
+    });
     merge(arena, player);
     sounds.drop();
-    arenaSweep(pivot);
+    arenaSweep(tSpin);
     updateScore();
+    lockState = clearLock(lockState);
     player.lockTimer = 0;
     lastActionWasRotate = false;
+    player.lastRotateUsedKick = false;
 
     if (!checkSprintCompletion()) {
         runOpponentTurnsAfterLock();
@@ -669,11 +747,16 @@ function lockPiece() {
 }
 
 function playerHardDrop() {
-    while (!collide(arena, player)) {
+    let cells = 0;
+    while (true) {
         player.pos.y++;
+        if (collide(arena, player)) {
+            player.pos.y--;
+            break;
+        }
+        cells++;
     }
-    player.pos.y--;
-
+    player.score += HARD_DROP_POINT * cells;
     lockCurrentPiece();
     dropCounter = 0;
 }
@@ -683,24 +766,27 @@ function playerMove(dir) {
     player.pos.x += dir;
     if (collide(arena, player)) {
         player.pos.x -= dir;
-    } else {
-        sounds.move();
+        return false;
     }
+    sounds.move();
+    refreshLockAfterMove();
+    return true;
 }
 
 function playerReset() {
-    if (player.next === null) {
-        player.next = createPiece(nextPieceType());
-    }
-
-    player.matrix = player.next;
-    player.next = createPiece(nextPieceType());
+    const type = pieceQueue.next();
+    player.matrix = createPiece(type);
+    player.rotation = initialRotationFor(type);
+    player.lastRotateUsedKick = false;
+    syncPlayerNextPreview();
 
     player.pos.y = 0;
     player.pos.x = (arena[0].length / 2 | 0) -
                    (player.matrix[0].length / 2 | 0);
     player.canHold = true;
+    lockState = clearLock(lockState);
     player.lockTimer = 0;
+    lastActionWasRotate = false;
     if (playerGarbageActive() && playerPendingGarbage > 0) {
         const incoming = playerPendingGarbage;
         playerPendingGarbage = 0;
@@ -734,26 +820,12 @@ function playerReset() {
 }
 
 function playerRotate(dir) {
-    const pos = player.pos.x;
-    let offset = 1;
-    lastActionWasRotate = false;
-    rotate(player.matrix, dir);
-    if (!collide(arena, player)) {
-        lastActionWasRotate = true;
-        sounds.rotate();
-    } else {
-        while (collide(arena, player)) {
-            player.pos.x += offset;
-            offset = -(offset + (offset > 0 ? 1 : -1));
-            if (offset > player.matrix[0].length) {
-                rotate(player.matrix, -dir);
-                player.pos.x = pos;
-                return;
-            }
-        }
-        lastActionWasRotate = true;
-        sounds.rotate();
-    }
+    if (!player.matrix) return;
+    const result = tryRotateSrs(arena, player, dir, collide);
+    lastActionWasRotate = result.ok;
+    if (!result.ok) return;
+    sounds.rotate();
+    refreshLockAfterMove();
 }
 
 function update(time = 0) {
@@ -762,24 +834,38 @@ function update(time = 0) {
 
     const deltaTime = time - lastTime;
     lastTime = time;
+    const frameDt = Math.max(0, deltaTime);
 
-    elapsedTime += Math.max(0, deltaTime);
+    inputController.tick(frameDt, action => {
+        if (canAcceptGameInput()) emitHorizontal(action);
+    });
+
+    elapsedTime += frameDt;
     if (eventMessageTimer > 0) {
         eventMessageTimer -= deltaTime;
         if (eventMessageTimer <= 0) lastEventMessage = '';
     }
-    updateScenarioState(Math.max(0, deltaTime));
+    updateScenarioState(frameDt);
     if (scenarioResolved) return;
+
+    const gravityInterval = inputController.isSoftDropping()
+        ? dropInterval / 20
+        : dropInterval;
     dropCounter += deltaTime;
-    if (dropCounter > dropInterval) {
-        playerDrop();
+    if (dropCounter > gravityInterval) {
+        playerDrop(inputController.isSoftDropping());
     }
 
-    if (player.lockTimer > 0) {
-        player.lockTimer -= deltaTime;
-        if (player.lockTimer <= 0) {
+    if (player.matrix && pieceIsGrounded()) {
+        lockState = onGroundContact(lockState);
+        lockState = tickLock(lockState, frameDt);
+        player.lockTimer = lockState.timer;
+        if (lockState.shouldLock) {
             lockPiece();
         }
+    } else if (lockState.active) {
+        lockState = clearLock(lockState);
+        player.lockTimer = 0;
     }
 
     if (comboTimer > 0) {
@@ -1144,6 +1230,16 @@ Object.entries(touchActions).forEach(([id, action]) => {
     });
 });
 
+const touchSoftDrop = document.getElementById('touch-down');
+const releaseTouchSoftDrop = () => inputController.release('softDrop');
+touchSoftDrop.addEventListener('pointerdown', event => {
+    event.preventDefault();
+    if (canAcceptGameInput()) inputController.press('softDrop');
+});
+touchSoftDrop.addEventListener('pointerup', releaseTouchSoftDrop);
+touchSoftDrop.addEventListener('pointerleave', releaseTouchSoftDrop);
+touchSoftDrop.addEventListener('pointercancel', releaseTouchSoftDrop);
+
 viewLeaderboardBtn.addEventListener('click', () => {
     startScreen.style.display = 'none';
     pauseScreen.style.display = 'none';
@@ -1209,15 +1305,21 @@ function resetOpponentState() {
 
 function resetGameState() {
     arena.forEach(row => row.fill(0));
-    pieceBag = [];
+    pieceQueue.reset();
+    inputController.reset();
+    lockState = createLockState(settings.timing.lockDelay);
     player.pos = {x: 0, y: 0};
     player.matrix = null;
     player.next = null;
     player.hold = null;
+    player.holdRotation = 0;
     player.canHold = true;
     player.score = 0;
     player.level = 1;
     player.lines = 0;
+    player.rotation = 0;
+    player.lastRotateUsedKick = false;
+    player.lockDelay = settings.timing.lockDelay;
     player.lockTimer = 0;
 
     dropCounter = 0;
@@ -1250,15 +1352,22 @@ function playerHold() {
 
     lastActionWasRotate = false;
     const currentPiece = player.matrix.map(row => [...row]);
+    const currentRotation = player.rotation ?? 0;
     if (player.hold === null) {
         player.hold = currentPiece;
+        player.holdRotation = currentRotation;
         playerReset();
     } else {
         const holdPiece = player.hold;
+        const holdRotation = player.holdRotation ?? 0;
         player.hold = currentPiece;
+        player.holdRotation = currentRotation;
         player.matrix = holdPiece.map(row => [...row]);
+        player.rotation = holdRotation;
+        player.lastRotateUsedKick = false;
         player.pos.y = 0;
         player.pos.x = (arena[0].length / 2 | 0) - (player.matrix[0].length / 2 | 0);
+        lockState = clearLock(lockState);
         player.lockTimer = 0;
         if (collide(arena, player)) {
             if (opponentPlayActive()) {
@@ -1305,28 +1414,44 @@ document.addEventListener('keydown', event => {
         startGameBtn.click();
         return;
     }
-    if (key === 'escape' || key === 'p') {
+
+    const action = actionForCode(event.code);
+    if (!action) return;
+
+    if (action === 'pause') {
+        event.preventDefault();
         togglePause();
         return;
     }
 
-    if (isGameOver || isPaused || !player.matrix) return;
+    if (!canAcceptGameInput()) return;
 
-    if (event.key === 'ArrowLeft') {
-        playerMove(-1);
-    } else if (event.key === 'ArrowRight') {
-        playerMove(1);
-    } else if (event.key === 'ArrowDown') {
-        playerDrop(true);
-    } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    if (event.repeat && (action === 'moveLeft' || action === 'moveRight' || action === 'softDrop')) {
+        return;
+    }
+
+    if (action === 'moveLeft' || action === 'moveRight' || action === 'softDrop') {
+        if (!event.repeat) inputController.press(action, emitHorizontal);
+        return;
+    }
+    if (event.repeat) return;
+
+    if (action === 'hardDrop') playerHardDrop();
+    else if (action === 'rotateCW') playerRotate(1);
+    else if (action === 'rotateCCW') playerRotate(-1);
+    else if (action === 'rotate180') {
         playerRotate(1);
-    } else if (event.key === ' ') {
-        event.preventDefault();
-        playerHardDrop();
-    } else if (key === 'c') {
-        playerHold();
-    } else if (key === 'q') {
-        quitGame();
+        playerRotate(1);
+    } else if (action === 'hold') playerHold();
+    else if (action === 'quit') quitGame();
+});
+
+document.addEventListener('keyup', event => {
+    if (isEditableTarget(event.target)) return;
+    const action = actionForCode(event.code);
+    if (action === 'moveLeft' || action === 'moveRight' || action === 'softDrop') {
+        inputController.release(action);
     }
 });
 
@@ -1340,10 +1465,11 @@ exitGameBtn.addEventListener('click', quitGame);
 
 //Expose state and functions to Playwright tests that rely on global scope.
 const exposed = {
-    arena, player, opponent,
+    arena, player, opponent, pieceQueue, inputController,
     gameOverTitleElement, gameOverScreen, startScreen, pauseScreen, modalOverlay,
     calculateGarbageAttack, scoreLines, createPiece, createMatrix,
-    chooseOpponentMove, evaluateOpponentBoard, nextPieceType,
+    chooseOpponentMove, evaluateOpponentBoard, nextPieceType, initialRotationFor,
+    detectTSpin, isPerfectClear, tryRotateSrs,
     endVersusMatch, resetGameState, clearFullRows, addGarbageLines,
     collide, merge, rotate,
     nextOpponentPieceType, resetOpponentState, arenaSweep,
@@ -1362,6 +1488,7 @@ const exposed = {
     themeMelody, themeMelodyName,
     isBgmRunning: isBGMRunning,
     PIECE_TYPES, SPRINT_TARGET_LINES, VERSUS_WIDTH, VERSUS_HEIGHT, MAX_PENDING_GARBAGE,
+    SOFT_DROP_POINT, HARD_DROP_POINT,
     SCENARIO_STAGES, SCENARIO_UPGRADES, starsForScenarioStage,
 };
 //Live-bound scalar state: tests read these via window.<name> and mutate them too.
@@ -1371,7 +1498,6 @@ const liveState = {
     combo: [() => combo, (v) => { combo = v; }],
     comboTimer: [() => comboTimer, (v) => { comboTimer = v; }],
     backToBackActive: [() => backToBackActive, (v) => { backToBackActive = v; }],
-    pieceBag: [() => pieceBag, (v) => { pieceBag = v; }],
     playerPendingGarbage: [() => playerPendingGarbage, (v) => { playerPendingGarbage = v; }],
     lastEventMessage: [() => lastEventMessage, (v) => { lastEventMessage = v; }],
     elapsedTime: [() => elapsedTime, (v) => { elapsedTime = v; }],
@@ -1388,6 +1514,8 @@ const liveState = {
     scenarioResolved: [() => scenarioResolved, (v) => { scenarioResolved = v; }],
     dropInterval: [() => dropInterval, (v) => { dropInterval = v; }],
     eventMessageTimer: [() => eventMessageTimer, (v) => { eventMessageTimer = v; }],
+    lockState: [() => lockState, (v) => { lockState = v; }],
+    settings: [() => settings, (v) => { settings = v; }],
 };
 
 for (const [name, value] of Object.entries(exposed)) {

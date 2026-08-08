@@ -1683,7 +1683,7 @@ async function testGameplayEnhancements(browser, url) {
   assert.equal(audio.notes, 24, 'the new BGM must use a compact loop');
 
   const bag = await page.evaluate(() => {
-    pieceBag = [];
+    pieceQueue.reset();
     return Array.from({ length: 7 }, () => nextPieceType());
   });
   assert.equal(new Set(bag).size, 7, 'each 7-bag must contain every piece once');
@@ -1693,32 +1693,32 @@ async function testGameplayEnhancements(browser, url) {
     player.level = 1;
     combo = 0;
     backToBackActive = false;
-    scoreLines(4, false);
+    scoreLines(4, 'none');
     return {
       score: player.score,
       backToBack: backToBackActive,
       event: lastEventMessage,
     };
   });
-  assert.equal(scoring.score, 800, 'a Quad Clear must award 800 points at level 1');
-  assert.equal(scoring.backToBack, true, 'a Quad Clear must enable Back-to-back');
-  assert.equal(scoring.event, 'QUAD CLEAR', 'a Quad Clear must expose an event message');
+  assert.equal(scoring.score, 800, 'a Tetris must award 800 points at level 1');
+  assert.equal(scoring.backToBack, true, 'a Tetris must enable Back-to-back');
+  assert.equal(scoring.event, 'TETRIS', 'a Tetris must expose an event message');
 
-  const pivot = await page.evaluate(() => {
+  const tSpin = await page.evaluate(() => {
     player.score = 0;
     player.level = 1;
     combo = 0;
     backToBackActive = false;
-    scoreLines(2, true);
+    scoreLines(2, 'full');
     return {
       score: player.score,
       event: lastEventMessage,
     };
   });
-  assert.equal(pivot.score, 1200, 'a Pivot double must award 1200 points at level 1');
-  assert.equal(pivot.event, 'PIVOT DOUBLE', 'a Pivot double must expose an event message');
+  assert.equal(tSpin.score, 1200, 'a T-Spin double must award 1200 points at level 1');
+  assert.equal(tSpin.event, 'T-SPIN DOUBLE', 'a T-Spin double must expose an event message');
 
-  const pivotNoLine = await page.evaluate(() => {
+  const tSpinNoLine = await page.evaluate(() => {
     const previousMode = gameMode;
     gameMode = 'versus';
     opponent.pendingGarbage = 0;
@@ -1726,16 +1726,16 @@ async function testGameplayEnhancements(browser, url) {
     player.level = 1;
     combo = 3;
     backToBackActive = false;
-    scoreLines(0, true);
+    scoreLines(0, 'full');
     const result = {
       pendingGarbage: opponent.pendingGarbage,
-      directAttack: calculateGarbageAttack(0, true, false, 0),
+      directAttack: calculateGarbageAttack(0, 'full', false, 0),
     };
     gameMode = previousMode;
     return result;
   });
-  assert.equal(pivotNoLine.pendingGarbage, 0, 'a zero-line Pivot must not send combo garbage');
-  assert.equal(pivotNoLine.directAttack, 0, 'a zero-line Pivot has no base garbage attack');
+  assert.equal(tSpinNoLine.pendingGarbage, 0, 'a zero-line T-Spin must not send combo garbage');
+  assert.equal(tSpinNoLine.directAttack, 0, 'a zero-line T-Spin has no base garbage attack');
 
   await page.selectOption('#game-mode', 'sprint');
   await page.getByRole('button', { name: 'Start Game' }).click();
@@ -1792,14 +1792,18 @@ async function testVersusMode(browser, url) {
 
   await page.selectOption('#game-mode', 'versus');
   await page.getByRole('button', { name: 'Start Game' }).click();
-  const match = await page.evaluate(() => ({
-    mode: gameMode,
-    opponentReady: Boolean(opponent.matrix && opponent.next),
-    independentBags: pieceBag !== opponent.pieceBag,
-    opponentX: opponent.pos.x,
-    expectedOpponentX: (VERSUS_WIDTH / 2 | 0) - (opponent.matrix[0].length / 2 | 0),
-    event: matchEventLog.at(-1),
-  }));
+  const match = await page.evaluate(() => {
+    const beforeOppBag = opponent.pieceBag.length;
+    pieceQueue.next();
+    return {
+      mode: gameMode,
+      opponentReady: Boolean(opponent.matrix && opponent.next),
+      independentBags: opponent.pieceBag.length === beforeOppBag,
+      opponentX: opponent.pos.x,
+      expectedOpponentX: (VERSUS_WIDTH / 2 | 0) - (opponent.matrix[0].length / 2 | 0),
+      event: matchEventLog.at(-1),
+    };
+  });
   assert.equal(match.mode, 'versus');
   assert.equal(await page.locator('#opponent-panel').isVisible(), true);
   assert.equal(match.opponentReady, true);
