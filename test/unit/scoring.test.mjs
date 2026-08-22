@@ -9,6 +9,7 @@ import {
     buildScoreResult,
     detectTSpin,
     isPerfectClear,
+    comboAfterLock,
 } from '../../src/js/scoring.js';
 import { createMatrix, createPiece, rotate } from '../../src/js/board.js';
 import {
@@ -224,7 +225,20 @@ test('buildScoreResult T-Spin Mini single includes drop points', () => {
         comboValue: 1,
     });
     assert.equal(result.points, TSPIN_LINE_SCORES.mini[1] + 3 * SOFT_DROP_POINT);
-    assert.equal(result.attack, 2, 'mini maps to pivot garbage table');
+    assert.equal(result.attack, 0, 'T-Spin Mini single sends no garbage');
+});
+
+test('calculateGarbageAttack uses a weaker Mini table than Full', () => {
+    assert.equal(calculateGarbageAttack(1, 'mini', false, 1), 0);
+    assert.equal(calculateGarbageAttack(2, 'mini', false, 1), 1);
+    assert.equal(calculateGarbageAttack(1, 'full', false, 1), 2);
+    assert.equal(calculateGarbageAttack(2, 'full', false, 1), 4);
+});
+
+test('comboAfterLock resets on a no-line lock including T-Spin', () => {
+    assert.equal(comboAfterLock(4, 1), 5);
+    assert.equal(comboAfterLock(0, 2), 1);
+    assert.equal(comboAfterLock(3, 0), 0, 'zero-line locks break combo');
 });
 
 // --- detectTSpin ---

@@ -4,6 +4,7 @@ import {
     NORMAL_LINE_SCORES,
     PERFECT_CLEAR_BONUS,
     PIVOT_GARBAGE_SCORES,
+    MINI_GARBAGE_SCORES,
     PIVOT_LINE_SCORES,
     SOFT_DROP_POINT,
     TSPIN_LINE_SCORES,
@@ -85,11 +86,14 @@ export function isPerfectClear(arena) {
 }
 
 export function calculateGarbageAttack(rowCount, pivot, hadBackToBack, comboValue) {
-    const isSpin = normalizeTSpin(pivot) !== 'none';
-    const baseScore = isSpin
-        ? (PIVOT_GARBAGE_SCORES[rowCount] ?? 0)
-        : (NORMAL_GARBAGE_SCORES[rowCount] ?? 0);
-    const qualifies = rowCount === 4 || (isSpin && rowCount > 0);
+    const kind = normalizeTSpin(pivot);
+    const table = kind === 'mini'
+        ? MINI_GARBAGE_SCORES
+        : kind !== 'none'
+            ? PIVOT_GARBAGE_SCORES
+            : NORMAL_GARBAGE_SCORES;
+    const baseScore = table[rowCount] ?? 0;
+    const qualifies = rowCount === 4 || (kind !== 'none' && rowCount > 0);
     return baseScore + (qualifies && hadBackToBack ? 1 : 0) + Math.max(0, comboValue - 1);
 }
 
@@ -162,9 +166,15 @@ export function buildScoreResult({
     const points = Math.round(baseScore * multiplier * level) + comboBonus + pcBonus + dropPoints;
     const attack = calculateGarbageAttack(
         rowCount,
-        kind !== 'none',
+        kind,
         hadBackToBack,
         rowCount > 0 ? comboValue : 0,
     );
     return {points, attack};
+}
+
+/** Consecutive-clear combo. Any no-line lock, including T-Spin, resets to 0. */
+export function comboAfterLock(combo, rowCount) {
+    if (rowCount > 0) return combo > 0 ? combo + 1 : 1;
+    return 0;
 }

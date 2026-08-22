@@ -103,3 +103,57 @@ export function tryRotateSrs(arena, player, dir, collideFn) {
     player.lastRotateUsedKick = false;
     return {ok: false, usedKick: false};
 }
+
+const SPIN_180_KICKS = {
+    '0>2': [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1]],
+    '2>0': [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1]],
+    '1>3': [[0, 0], [0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, -1]],
+    '3>1': [[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [1, 1]],
+};
+
+const I_180_KICKS = {
+    '0>2': [[0, 0], [0, 1], [0, -1], [1, 0], [-1, 0]],
+    '2>0': [[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0]],
+    '1>3': [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]],
+    '3>1': [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]],
+};
+
+/**
+ * Atomic 180. Never leaves the piece at +90 if the second half fails.
+ * @returns {{ok: boolean, usedKick: boolean}}
+ */
+export function tryRotate180(arena, player, collideFn) {
+    const from = player.rotation ?? 0;
+    const to = (from + 2) % 4;
+    const originX = player.pos.x;
+    const originY = player.pos.y;
+    const value = pieceCellValue(player.matrix);
+
+    rotate(player.matrix, 1);
+    rotate(player.matrix, 1);
+
+    const table = value === 4
+        ? {'0>2': [[0, 0]], '2>0': [[0, 0]], '1>3': [[0, 0]], '3>1': [[0, 0]]}
+        : value === 7 ? I_180_KICKS : SPIN_180_KICKS;
+    const offsets = table[`${from}>${to}`] || [[0, 0]];
+
+    for (let i = 0; i < offsets.length; i++) {
+        const [dx, dy] = offsets[i];
+        player.pos.x = originX + dx;
+        player.pos.y = originY + dy;
+        if (!collideFn(arena, player)) {
+            player.rotation = to;
+            const usedKick = i > 0;
+            player.lastRotateUsedKick = usedKick;
+            return {ok: true, usedKick};
+        }
+    }
+
+    rotate(player.matrix, 1);
+    rotate(player.matrix, 1);
+    player.pos.x = originX;
+    player.pos.y = originY;
+    player.rotation = from;
+    player.lastRotateUsedKick = false;
+    return {ok: false, usedKick: false};
+}

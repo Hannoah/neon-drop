@@ -1,14 +1,30 @@
 import {
     PIECE_TYPES,
     SPRINT_TARGET_LINES,
+    MARATHON_TARGET_LEVEL,
+    MARATHON_CLEAR_BONUS,
     VERSUS_WIDTH,
     VERSUS_HEIGHT,
     MAX_PENDING_GARBAGE,
     SOFT_DROP_POINT,
     HARD_DROP_POINT,
 } from './src/js/constants.js';
+import { mulberry32, dailySeed, dateKeyUTC } from './src/js/rng.js';
+import {
+    readMeta,
+    writeMeta,
+    recordRun,
+    noteTetris,
+    noteCombo,
+    noteRunEnd,
+    markTutorialDone,
+    paceValueAt,
+    FRAME_UNLOCKS,
+    CLEAR_UNLOCKS,
+} from './src/js/meta.js';
 import {
     shuffleBag,
+    createBagFactory,
     clearFullRows,
     addGarbageLines,
     collide,
@@ -18,6 +34,9 @@ import {
     merge,
     isEditableTarget,
     formatElapsedTime,
+    pieceTypeFromMatrix,
+    initialRotationFor,
+    hasGarbage,
 } from './src/js/board.js';
 import {
     calculateGarbageAttack,
@@ -26,10 +45,11 @@ import {
     qualifiesForBackToBack,
     detectTSpin,
     isPerfectClear,
+    comboAfterLock,
 } from './src/js/scoring.js';
 import { evaluateOpponentBoard, chooseOpponentMove } from './src/js/ai.js';
 import { createAudioSystem, themeMelody, themeMelodyName } from './src/js/audio.js';
-import { createRenderer } from './src/js/renderer.js';
+import { createRenderer, expireFlashingLines } from './src/js/renderer.js';
 import { readLeaderboard, writeLeaderboard, renderLeaderboard } from './src/js/leaderboard.js';
 import {
     SCENARIO_STAGES,
@@ -41,7 +61,7 @@ import {
     scenarioUpgradeEffects,
 } from './src/js/scenario.js';
 import { createPieceQueue } from './src/js/queue.js';
-import { tryRotateSrs } from './src/js/srs.js';
+import { tryRotateSrs, tryRotate180 } from './src/js/srs.js';
 import {
     createLockState,
     onGroundContact,
@@ -50,6 +70,15 @@ import {
     clearLock,
 } from './src/js/lock.js';
 import { createInputController } from './src/js/input.js';
+import { isInstantGravity } from './src/js/gravity.js';
+import {
+    formatRunGrade,
+    formatUnlocks,
+    controlLegendRows,
+    dailyCardDetail,
+    msUntilNextUtcDay,
+    fanfareKind,
+} from './src/js/juice.js';
 import {
     normalizeSettings,
     DEFAULT_SETTINGS,
@@ -78,6 +107,17 @@ const gameOverTitleElement = document.getElementById('game-over-title');
 const nicknameInput = document.getElementById('nickname');
 const saveScoreBtn = document.getElementById('save-score-btn');
 const startGameBtn = document.getElementById('start-game-btn');
+const menuTutorialBtn = document.getElementById('menu-tutorial-btn');
+const firstRunNudge = document.getElementById('first-run-nudge');
+const firstRunTutorialBtn = document.getElementById('first-run-tutorial-btn');
+const playModeHint = document.getElementById('play-mode-hint');
+const pauseControls = document.getElementById('pause-controls');
+const unlockToast = document.getElementById('unlock-toast');
+const pbSummary = document.getElementById('pb-summary');
+const paceGhostElement = document.getElementById('pace-ghost');
+const runGradeElement = document.getElementById('run-grade');
+const cosmeticFrames = document.getElementById('cosmetic-frames');
+const cosmeticClears = document.getElementById('cosmetic-clears');
 const scenarioContinueBtn = document.getElementById('scenario-continue-btn');
 const scenarioContinueDetail = document.getElementById('scenario-continue-detail');
 const scenarioMapScreen = document.getElementById('scenario-map-screen');
@@ -138,7 +178,12 @@ const modeElement = document.getElementById('mode');
 const timerElement = document.getElementById('timer');
 const comboElement = document.getElementById('combo');
 const backToBackElement = document.getElementById('back-to-back');
+const flowRow = document.getElementById('flow-row');
+const flowValueElement = document.getElementById('flow-value');
+const flowMeterFill = document.getElementById('flow-meter-fill');
 const eventMessageElement = document.getElementById('event-message');
+const clearRewardElement = document.getElementById('clear-reward');
+let clearRewardTimer = 0;
 const gameOverMenuBtn = document.getElementById('game-over-menu-btn');
 const opponentCanvas = document.getElementById('opponent-board');
 const opponentContext = opponentCanvas.getContext('2d');
@@ -157,14 +202,18 @@ const PREFERENCES_KEY = 'neonDropPreferences';
 const SCENARIO_KEY = 'neonDropScenario';
 const touchActions = {
     'touch-rotate': () => playerRotate(1),
+    'touch-180': () => {
+        if (!player.matrix) return;
+        const result = tryRotate180(arena, player, collide);
+        lastActionWasRotate = result.ok;
+        if (result.ok) {
+            sounds.rotate();
+            refreshLockAfterMove();
+        }
+    },
     'touch-drop': () => playerHardDrop(),
     'touch-hold': () => playerHold(),
 };
-
-context.scale(20, 20);
-nextContext.scale(20, 20);
-holdContext.scale(20, 20);
-opponentContext.scale(20, 20);
 
 const audioSystem = createAudioSystem(bgmToggle, sfxToggle);
 const {audioCtx, startBGM, stopBGM, isBGMRunning, sounds} = audioSystem;
@@ -177,9 +226,31 @@ let combo = 0;
 let comboTimer = 0;
 let shakeTime = 0;
 let flashingLines = [];
+/** @type {null | {tSpin: string, rowCount: number, ys: number[], life: number}} */
+let pendingClear = null;
+let runStatsSaved = false;
 let gameMode = 'marathon';
 let elapsedTime = 0;
 let backToBackActive = false;
+let b2bChain = 0;
+let flowMeter = 0;
+let meta = readMeta();
+let paceSamples = [];
+let lastPaceSampleAt = 0;
+let tutorialStep = 0;
+let activeSeed = null;
+const RANKED_MODES = new Set(['marathon', 'sprint', 'versus', 'daily', 'cheese', 'invisible', 'twentyg', 'tutorial']);
+const MODE_LABELS = {
+    sprint: 'Sprint',
+    versus: 'Versus AI',
+    scenario: 'Circuit',
+    daily: 'Daily',
+    cheese: 'Cheese',
+    invisible: 'Invisible',
+    twentyg: '20G',
+    tutorial: 'Tutorial',
+    marathon: 'Marathon',
+};
 let lastActionWasRotate = false;
 let lastEventMessage = '';
 let eventMessageTimer = 0;
@@ -244,6 +315,7 @@ const renderer = createRenderer({
     getState: () => ({
         shakeTime, arena, player, combo, flashingLines,
         opponentActive: opponentPlayActive(), opponent,
+        invisibleStack: gameMode === 'invisible',
     }),
 });
 const {draw, drawNext, drawHold, drawOpponent} = renderer;
@@ -256,11 +328,105 @@ function canAcceptGameInput() {
     return Boolean(player.matrix) && !isPaused && !isGameOver;
 }
 
+function canPauseGame() {
+    return !isGameOver && (Boolean(player.matrix) || Boolean(pendingClear));
+}
+
 function selectGameMode(mode) {
     gameModeSelect.value = mode;
     modeCards.forEach(card => {
         card.setAttribute('aria-pressed', String(card.dataset.mode === mode));
     });
+    if (playModeHint) playModeHint.textContent = MODE_LABELS[mode] || 'Marathon';
+    updateLeaderboard();
+}
+
+function formatPbTime(ms) {
+    if (!Number.isFinite(ms)) return '—';
+    const total = Math.max(0, Math.floor(ms / 1000));
+    const m = String(Math.floor(total / 60)).padStart(2, '0');
+    const s = String(total % 60).padStart(2, '0');
+    return `${m}:${s}`;
+}
+
+function refreshPbSummary() {
+    if (!pbSummary) return;
+    const key = dateKeyUTC();
+    const daily = meta.pb.daily?.dateKey === key ? meta.pb.daily : null;
+    pbSummary.textContent = [
+        `Sprint PB ${formatPbTime(meta.pb.sprintMs)}${meta.pb.sprintGrade ? ` ${meta.pb.sprintGrade}` : ''}`,
+        `Marathon PB ${formatPbTime(meta.pb.marathonMs)}${meta.pb.marathonGrade ? ` ${meta.pb.marathonGrade}` : ''}`,
+        `Daily ${key}${meta.stats.dailyStreak ? ` STREAK ${meta.stats.dailyStreak}` : ''} ${daily ? `${formatPbTime(daily.ms)} ${daily.grade || ''}`.trim() : '—'}`,
+    ].join(' · ');
+
+    const dailyCard = document.querySelector('[data-mode-card="daily"] span');
+    if (dailyCard) {
+        dailyCard.textContent = dailyCardDetail({
+            dateKey: key,
+            streak: meta.stats.dailyStreak || 0,
+            msLeft: msUntilNextUtcDay(),
+        });
+    }
+}
+
+function applyCosmetics() {
+    gameContainer.classList.remove('frame-gold', 'frame-rival', 'frame-mint', 'clear-flare', 'clear-pulse');
+    const frame = FRAME_UNLOCKS[meta.unlocks.selectedFrame];
+    const clearFx = CLEAR_UNLOCKS[meta.unlocks.selectedClear];
+    if (frame?.css) gameContainer.classList.add(frame.css);
+    if (clearFx?.css) gameContainer.classList.add(clearFx.css);
+}
+
+function renderCosmeticPickers() {
+    if (!cosmeticFrames || !cosmeticClears) return;
+    const frameHtml = meta.unlocks.frames.map(id => {
+        const item = FRAME_UNLOCKS[id];
+        const checked = meta.unlocks.selectedFrame === id ? 'checked' : '';
+        return `<label><input type="radio" name="cosmetic-frame" value="${id}" ${checked}> ${item.name}</label>`;
+    }).join('');
+    const clearHtml = meta.unlocks.clears.map(id => {
+        const item = CLEAR_UNLOCKS[id];
+        const checked = meta.unlocks.selectedClear === id ? 'checked' : '';
+        return `<label><input type="radio" name="cosmetic-clear" value="${id}" ${checked}> ${item.name}</label>`;
+    }).join('');
+    cosmeticFrames.innerHTML = frameHtml || '<span style="color:var(--muted)">Ink</span>';
+    cosmeticClears.innerHTML = clearHtml || '<span style="color:var(--muted)">Mint</span>';
+}
+
+function punchClear(rows) {
+    const stage = document.querySelector('#player-panel .board-stage');
+    if (stage) {
+        stage.classList.remove('clear-punch');
+        void stage.offsetWidth;
+        stage.classList.add('clear-punch');
+        window.setTimeout(() => stage.classList.remove('clear-punch'), 280);
+    }
+    if (rows >= 3) sounds.stinger?.();
+}
+
+function modeLineGoal() {
+    if (gameMode === 'sprint' || gameMode === 'daily' || gameMode === 'invisible') return SPRINT_TARGET_LINES;
+    if (gameMode === 'twentyg') return 20;
+    return null;
+    return null;
+}
+
+function configureRunSeedAndQueue() {
+    activeSeed = null;
+    if (gameMode === 'daily') {
+        activeSeed = dailySeed();
+        pieceQueue.setBagFactory(createBagFactory(mulberry32(activeSeed)));
+    } else {
+        pieceQueue.setBagFactory(shuffleBag);
+    }
+    pieceQueue.reset();
+}
+
+function tutorialObjectiveText() {
+    if (tutorialStep <= 0) return 'TUTORIAL · Clear 1 line';
+    if (tutorialStep === 1) return 'TUTORIAL · Clear a Double+';
+    if (tutorialStep === 2) return 'TUTORIAL · Use Hold (C)';
+    return 'TUTORIAL · Done';
 }
 
 function readPreferences() {
@@ -319,7 +485,7 @@ function writeScenarioProgress(value = scenarioProgress) {
 
 function restorePreferences() {
     applyLiveSettings(readPreferences());
-    if (['marathon', 'sprint', 'versus'].includes(settings.mode)) {
+    if (RANKED_MODES.has(settings.mode)) {
         gameModeSelect.value = settings.mode;
     }
     bgmToggle.checked = settings.bgm;
@@ -423,6 +589,7 @@ function showSettings(returnScreen = 'start') {
     hideModalScreens();
     settingsScreen.style.display = 'block';
     syncSettingsUI();
+    renderCosmeticPickers();
     openModal('settings-screen-title', settingsBackBtn);
 }
 
@@ -549,7 +716,7 @@ function startScenarioStage(stageId) {
     gameMode = 'scenario';
     isGameOver = false;
     isPaused = false;
-    opponentPanel.style.display = stage.kind === 'opponent' ? 'block' : 'none';
+    opponentPanel.style.display = stage.kind === 'opponent' ? 'flex' : 'none';
     gameContainer.classList.toggle('versus-active', stage.kind === 'opponent');
     gameContainer.classList.remove('play-enter');
     void gameContainer.offsetWidth;
@@ -576,18 +743,6 @@ function returnToMenu() {
     showStartScreen();
 }
 
-/**
- * Spawn matrices for B/C/S are not Guideline R0; align SRS rotation
- * index to the geometry createPiece() returns.
- * B (J-like vertical) ≡ R3, C (L-like vertical) ≡ R1, S (I vertical) ≡ R3.
- */
-function initialRotationFor(type) {
-    if (type === 'B') return 3;
-    if (type === 'C') return 1;
-    if (type === 'S') return 3;
-    return 0;
-}
-
 function nextPieceType() {
     return pieceQueue.next();
 }
@@ -609,8 +764,9 @@ function actionForCode(code) {
 }
 
 function emitHorizontal(action) {
-    if (action === 'moveLeft') playerMove(-1);
-    else if (action === 'moveRight') playerMove(1);
+    if (action === 'moveLeft') return playerMove(-1);
+    if (action === 'moveRight') return playerMove(1);
+    return false;
 }
 
 function pieceIsGrounded() {
@@ -662,12 +818,79 @@ function opponentPlayActive() {
 }
 
 function scenarioDropInterval() {
+    if (gameMode === 'twentyg') return 1;
     const stepMs = gameMode === 'scenario' && activeScenarioStage
-        ? activeScenarioStage.dropStepMs : 100;
-    const base = Math.max(100, 1000 - (player.level - 1) * stepMs);
+        ? activeScenarioStage.dropStepMs
+        : (gameMode === 'marathon' ? 70 : 100);
+    const startMs = gameMode === 'marathon' ? 1100 : 1000;
+    const floorMs = gameMode === 'marathon' ? 140 : 100;
+    let base = Math.max(floorMs, startMs - (player.level - 1) * stepMs);
+    // Marathon phase storm: snappier gravity from level 10.
+    if (gameMode === 'marathon' && player.level >= 10) base = Math.max(floorMs, Math.round(base * 0.85));
     const multiplier = gameMode === 'scenario'
         ? scenarioUpgradeEffects(scenarioProgress.upgrades).dropIntervalMultiplier : 1;
     return Math.round(base * multiplier);
+}
+
+function triggerMarathonPhases(prevLevel, nextLevel) {
+    if (gameMode !== 'marathon' || nextLevel <= prevLevel) return null;
+    if (prevLevel < 5 && nextLevel >= 5) {
+        flowMeter = Math.min(100, flowMeter + 20);
+        sounds.stinger?.();
+        return 'PHASE · EDGE';
+    }
+    if (prevLevel < 10 && nextLevel >= 10) {
+        addGarbageLines(arena, 2);
+        sounds.stinger?.();
+        screenShake(5);
+        return 'PHASE · STORM';
+    }
+    return null;
+}
+
+/** Marathon streak spice — milestone clear bonuses (scaled by level). */
+function marathonComboRushBonus(comboValue, level) {
+    if (comboValue === 3) return 250 * level;
+    if (comboValue === 5) return 600 * level;
+    if (comboValue === 8) return 1400 * level;
+    if (comboValue === 10) return 2400 * level;
+    if (comboValue >= 12 && comboValue % 2 === 0) return 900 * level;
+    return 0;
+}
+
+/** Extra payout for Double / Triple / Tetris so multi-line clears feel rewarding. */
+function multiClearBounty(rowCount, level) {
+    const table = [0, 0, 120, 280, 600];
+    return (table[rowCount] ?? 0) * level;
+}
+
+function showClearReward(points, rowCount, kind = 'clear') {
+    if (!clearRewardElement || points <= 0 || rowCount <= 0) return;
+    clearRewardElement.hidden = false;
+    clearRewardElement.dataset.tier = String(Math.min(4, rowCount));
+    clearRewardElement.dataset.kind = kind;
+    clearRewardElement.textContent = kind === 'perfect' ? 'PERFECT'
+        : kind === 'tetris' ? 'TETRIS'
+        : kind === 'tspin' ? (lastEventMessage || 'T-SPIN')
+        : `+${points}`;
+    clearRewardElement.classList.remove('is-on');
+    void clearRewardElement.offsetWidth;
+    clearRewardElement.classList.add('is-on');
+    clearRewardTimer = 900;
+}
+
+function marathonFlowMultiplier() {
+    return 1 + Math.floor(Math.max(0, Math.min(100, flowMeter)) / 50) * 0.25;
+}
+
+function bumpMarathonFlow(rowCount) {
+    if (gameMode !== 'marathon' || rowCount <= 0) return;
+    flowMeter = Math.min(100, flowMeter + 10 + rowCount * 8 + Math.min(16, combo * 2));
+}
+
+function drainMarathonFlow(amount = 28) {
+    if (gameMode !== 'marathon') return;
+    flowMeter = Math.max(0, flowMeter - amount);
 }
 
 function applyPendingGarbage(target, count, recipient) {
@@ -681,70 +904,207 @@ function scoreLines(rowCount, tSpinOrPivot = 'none', perfectClear = false) {
     const tSpin = normalizeTSpinArg(tSpinOrPivot);
     const qualifies = qualifiesForBackToBack(rowCount, tSpin);
     const hadBackToBack = backToBackActive && qualifies;
+    const prevLevel = player.level;
 
     if (qualifies) {
         backToBackActive = true;
+        b2bChain = hadBackToBack ? b2bChain + 1 : 1;
     } else if (rowCount > 0) {
         backToBackActive = false;
+        b2bChain = 0;
     }
 
+    let phaseEvent = null;
     if (rowCount > 0) {
-        combo = combo > 0 ? combo + 1 : 1;
-        comboTimer = 2000;
+        combo = comboAfterLock(combo, rowCount);
+        // Piece-based combo: stays until a lock with no clear (no wall-clock expiry).
+        comboTimer = 0;
         player.lines += rowCount;
         player.level = Math.floor(player.lines / 10) + 1;
+        phaseEvent = triggerMarathonPhases(prevLevel, player.level);
         dropInterval = scenarioDropInterval();
         completeScenarioLineProgress(rowCount);
-    } else if (tSpin === 'none') {
-        combo = 0;
+        bumpMarathonFlow(rowCount);
+        meta = noteCombo(meta, combo);
+        if (rowCount === 4) {
+            const tetrisNote = noteTetris(meta);
+            meta = tetrisNote.meta;
+            if (tetrisNote.unlocks.length) {
+                writeMeta(meta);
+                showUnlockToast(tetrisNote.unlocks);
+            }
+        }
+        if (gameMode === 'tutorial') {
+            if (tutorialStep === 0 && rowCount >= 1) tutorialStep = 1;
+            else if (tutorialStep === 1 && rowCount >= 2) tutorialStep = 2;
+        }
+    } else {
+        combo = comboAfterLock(combo, 0);
     }
 
     const {points, attack} = buildScoreResult({
         rowCount, tSpin, perfectClear, hadBackToBack, level: player.level, comboValue: combo,
     });
+    // Marathon: double the usual combo table bonus + milestone rush payouts.
+    const marathonComboExtra = gameMode === 'marathon' && rowCount > 0
+        ? Math.max(0, combo - 1) * 50 * player.level
+        : 0;
+    const rushBonus = gameMode === 'marathon' && rowCount > 0
+        ? marathonComboRushBonus(combo, player.level) : 0;
+    const b2bChainBonus = gameMode === 'marathon' && b2bChain >= 2
+        ? 200 * b2bChain * player.level : 0;
+    const multiBonus = rowCount >= 2 ? multiClearBounty(rowCount, player.level) : 0;
+    const leveledUp = rowCount > 0 && player.level > prevLevel;
+    const levelBonus = leveledUp ? 400 * player.level : 0;
+    const flowMult = gameMode === 'marathon' && rowCount > 0 ? marathonFlowMultiplier() : 1;
     const upgradeEffects = gameMode === 'scenario'
         ? scenarioUpgradeEffects(scenarioProgress.upgrades) : null;
-    player.score += upgradeEffects ? Math.round(points * upgradeEffects.scoreMultiplier) : points;
+    const awarded = Math.round(
+        (points + marathonComboExtra + rushBonus + b2bChainBonus + multiBonus) * flowMult
+        + levelBonus,
+    );
+    player.score += upgradeEffects ? Math.round(awarded * upgradeEffects.scoreMultiplier) : awarded;
     // Pulse Amp: outgoing garbage bonus only when attack > 0.
     queueGarbageForOpponent(attack > 0 ? attack + (upgradeEffects?.outgoingGarbageBonus || 0) : 0);
-    lastEventMessage = eventMessageFor(rowCount, tSpin, perfectClear);
-    eventMessageTimer = 2000;
+
+    let event = eventMessageFor(rowCount, tSpin, perfectClear);
+    if (phaseEvent) {
+        event = phaseEvent;
+        eventMessageTimer = 2400;
+    } else if (leveledUp) {
+        event = `LEVEL ${player.level}`;
+        screenShake(5);
+    } else if (rushBonus > 0) {
+        event = `COMBO RUSH x${combo}`;
+        if (combo >= 5) screenShake(4 + Math.min(6, combo));
+    } else if (flowMeter >= 100 && rowCount > 0 && gameMode === 'marathon') {
+        event = event ? `${event} · FLOW MAX` : 'FLOW MAX';
+    } else if (b2bChain >= 2 && rowCount > 0) {
+        event = event ? `${event} · B2B x${b2bChain}` : `B2B x${b2bChain}`;
+    } else if (rowCount > 0 && combo >= 2) {
+        event = event ? `${event} · x${combo}` : `COMBO x${combo}`;
+    }
+    if (rowCount >= 2 && awarded > 0 && !leveledUp && rushBonus <= 0) {
+        event = event ? `${event} · +${awarded}` : `+${awarded}`;
+    }
+    lastEventMessage = event;
+    if (!phaseEvent) {
+        eventMessageTimer = leveledUp || rushBonus > 0 || rowCount >= 3 ? 2400 : 2000;
+    }
+    const kind = fanfareKind({rowCount, tSpin, perfectClear, combo});
+    sounds.fanfare?.(kind);
+    if (rowCount > 0 && (kind === 'perfect' || kind === 'combo' || kind === 'clear')) {
+        showClearReward(awarded, rowCount, kind);
+    }
     updateScore();
     return player.score;
 }
 
-function arenaSweep(tSpinOrPivot = 'none') {
+function fullRowIndices(board) {
+    const ys = [];
+    for (let y = board.length - 1; y >= 0; --y) {
+        if (board[y].every(cell => cell !== 0)) ys.push(y);
+    }
+    return ys;
+}
+
+function removeRowsByIndex(board, ys) {
+    if (!ys.length) return;
+    const drop = new Set(ys);
+    const width = board[0].length;
+    const height = board.length;
+    const kept = [];
+    for (let y = 0; y < height; y++) {
+        if (!drop.has(y)) kept.push(board[y]);
+    }
+    while (kept.length < height) {
+        kept.unshift(new Array(width).fill(0));
+    }
+    for (let y = 0; y < height; y++) {
+        board[y] = kept[y];
+    }
+}
+
+function clearFlashPeak(rowCount) {
+    return 260 + rowCount * 40;
+}
+
+function beginClearFlash(ys, rowCount) {
+    const peak = clearFlashPeak(rowCount);
+    flashingLines = ys.map(y => ({y, time: peak, peak}));
+    return peak;
+}
+
+function resolvePendingClear() {
+    if (!pendingClear) return 0;
+    const {tSpin, rowCount, ys} = pendingClear;
+    pendingClear = null;
+    removeRowsByIndex(arena, ys);
+    flashingLines = [];
+    const perfectClear = isPerfectClear(arena);
+    scoreLines(rowCount, tSpin, perfectClear);
+    return rowCount;
+}
+
+function finishLockAfterSweep() {
+    if (!checkSprintCompletion() && !checkMarathonCompletion()
+        && !checkCheeseCompletion() && !checkTutorialCompletion()) {
+        runOpponentTurnsAfterLock();
+        if (!isGameOver) playerReset();
+    }
+}
+
+/** Test / sync helper: finish a deferred clear immediately. */
+function flushPendingClear() {
+    if (!pendingClear) return false;
+    resolvePendingClear();
+    finishLockAfterSweep();
+    return true;
+}
+
+/**
+ * Clear full rows. Pass `{ defer: true }` from piece lock so the flash plays
+ * on still-visible lines before rows are removed (avoids wrong-Y flash after splice).
+ */
+function arenaSweep(tSpinOrPivot = 'none', options = {}) {
     const tSpin = normalizeTSpinArg(tSpinOrPivot);
-    let rowCount = 0;
-    outer: for (let y = arena.length - 1; y >= 0; --y) {
-        for (let x = 0; x < arena[y].length; ++x) {
-            if (arena[y][x] === 0) {
-                continue outer;
-            }
+    const defer = Boolean(options && options.defer);
+    const ys = fullRowIndices(arena);
+    const rowCount = ys.length;
+
+    if (rowCount === 0) {
+        if (tSpin !== 'none') {
+            scoreLines(0, tSpin, false);
+        } else {
+            combo = 0;
+            b2bChain = 0;
+            drainMarathonFlow(28);
+            lastEventMessage = '';
+            eventMessageTimer = 0;
+            updateScore();
         }
-
-        flashingLines.push({y, time: 100});
-        const row = arena.splice(y, 1)[0].fill(0);
-        arena.unshift(row);
-        ++y;
-        rowCount++;
+        return 0;
     }
 
-    if (rowCount > 0) {
-        sounds.clear();
-        if (rowCount === 4) screenShake(10);
+    if (pendingClear) resolvePendingClear();
+
+    const peak = beginClearFlash(ys, rowCount);
+    sounds.clear(rowCount);
+    punchClear(rowCount);
+    const flashKind = fanfareKind({rowCount, tSpin, perfectClear: false, combo});
+    if (flashKind === 'tetris' || flashKind === 'tspin') {
+        showClearReward(1, rowCount, flashKind);
+    }
+    if (rowCount >= 2) screenShake(2 + rowCount * 1.5);
+
+    if (defer) {
+        pendingClear = {tSpin, rowCount, ys: ys.slice(), life: peak};
+        return rowCount;
     }
 
-    const perfectClear = rowCount > 0 && isPerfectClear(arena);
-    if (rowCount > 0 || tSpin !== 'none') {
-        scoreLines(rowCount, tSpin, perfectClear);
-    } else {
-        combo = 0;
-        lastEventMessage = '';
-        eventMessageTimer = 0;
-        updateScore();
-    }
-
+    removeRowsByIndex(arena, ys);
+    const perfectClear = isPerfectClear(arena);
+    scoreLines(rowCount, tSpin, perfectClear);
     return rowCount;
 }
 
@@ -760,7 +1120,6 @@ function playerDrop(manual = false) {
         player.lockTimer = 0;
         if (manual) player.score += SOFT_DROP_POINT;
     }
-    dropCounter = 0;
 }
 
 function endVersusMatch(title, eventType) {
@@ -844,9 +1203,85 @@ function runOpponentTurnsAfterLock() {
     return turnsRun;
 }
 
+function finishRankedRun(title, {awardClearBonus = false} = {}) {
+    if (awardClearBonus) {
+        player.score += MARATHON_CLEAR_BONUS;
+        lastEventMessage = 'MARATHON CLEAR';
+        eventMessageTimer = 2500;
+        updateScore();
+        screenShake(8);
+    }
+    if (gameMode === 'tutorial') {
+        meta = markTutorialDone(meta);
+        writeMeta(meta);
+        applyCosmetics();
+        if (runGradeElement) {
+            runGradeElement.hidden = false;
+            runGradeElement.dataset.grade = '';
+            runGradeElement.classList.remove('is-pb');
+            runGradeElement.textContent = 'Tutorial complete · Mint frame unlocked';
+        }
+        showUnlockToast(['frame:mint']);
+        showHighScoreModal('Tutorial Complete!');
+        return;
+    }
+    if (['sprint', 'daily', 'marathon'].includes(gameMode)) {
+        const result = recordRun(meta, {
+            mode: gameMode,
+            elapsedMs: elapsedTime,
+            score: player.score,
+            paceSamples,
+        });
+        meta = result.meta;
+        writeMeta(meta);
+        runStatsSaved = true;
+        applyCosmetics();
+        refreshPbSummary();
+        if (runGradeElement) {
+            runGradeElement.hidden = false;
+            runGradeElement.dataset.grade = result.grade || '';
+            runGradeElement.classList.toggle('is-pb', Boolean(result.isPb));
+            runGradeElement.textContent = formatRunGrade(result);
+        }
+        if (result.unlocks.length) showUnlockToast(result.unlocks);
+    } else if (runGradeElement) {
+        runGradeElement.hidden = true;
+        runGradeElement.textContent = '';
+    }
+    showHighScoreModal(title);
+}
+
 function checkSprintCompletion() {
-    if (gameMode !== 'sprint' || player.lines < SPRINT_TARGET_LINES) return false;
-    showHighScoreModal('Sprint Complete!');
+    const goal = modeLineGoal();
+    if (goal == null || player.lines < goal) return false;
+    if (gameMode === 'tutorial' && tutorialStep < 2) return false;
+    const titles = {
+        sprint: 'Sprint Complete!',
+        daily: 'Daily Clear!',
+        cheese: 'Cheese Clear!',
+        invisible: 'Invisible Clear!',
+        twentyg: '20G Clear!',
+        tutorial: 'Tutorial Complete!',
+    };
+    finishRankedRun(titles[gameMode] || 'Clear!');
+    return true;
+}
+
+function checkCheeseCompletion() {
+    if (gameMode !== 'cheese' || hasGarbage(arena)) return false;
+    finishRankedRun('Cheese Clear!');
+    return true;
+}
+
+function checkMarathonCompletion() {
+    if (gameMode !== 'marathon' || player.level < MARATHON_TARGET_LEVEL) return false;
+    finishRankedRun('Marathon Clear!', {awardClearBonus: true});
+    return true;
+}
+
+function checkTutorialCompletion() {
+    if (gameMode !== 'tutorial' || tutorialStep < 3) return false;
+    finishRankedRun('Tutorial Complete!');
     return true;
 }
 
@@ -859,17 +1294,17 @@ function lockCurrentPiece() {
     });
     merge(arena, player);
     sounds.drop();
-    arenaSweep(tSpin);
+    // Piece is already merged — hide it so the clear flash isn't double-drawn.
+    player.matrix = null;
+    arenaSweep(tSpin, {defer: true});
     updateScore();
     lockState = clearLock(lockState);
     player.lockTimer = 0;
     lastActionWasRotate = false;
     player.lastRotateUsedKick = false;
 
-    if (!checkSprintCompletion()) {
-        runOpponentTurnsAfterLock();
-        if (!isGameOver) playerReset();
-    }
+    if (pendingClear) return;
+    finishLockAfterSweep();
 }
 
 function lockPiece() {
@@ -887,6 +1322,8 @@ function playerHardDrop() {
         cells++;
     }
     player.score += HARD_DROP_POINT * cells;
+    sounds.hardDrop?.();
+    // Tall hard-drops keep score; shake stays reserved for clears / level-ups.
     lockCurrentPiece();
     dropCounter = 0;
 }
@@ -971,36 +1408,71 @@ function update(time = 0) {
     });
 
     elapsedTime += frameDt;
+    if (['sprint', 'marathon', 'daily'].includes(gameMode) && elapsedTime - lastPaceSampleAt >= 1000) {
+        lastPaceSampleAt = elapsedTime;
+        paceSamples.push({
+            t: Math.round(elapsedTime),
+            v: gameMode === 'marathon' ? player.level : player.lines,
+        });
+    }
     if (eventMessageTimer > 0) {
         eventMessageTimer -= deltaTime;
         if (eventMessageTimer <= 0) lastEventMessage = '';
     }
+    if (clearRewardTimer > 0) {
+        clearRewardTimer -= frameDt;
+        if (clearRewardTimer <= 0 && clearRewardElement) {
+            clearRewardElement.classList.remove('is-on');
+            clearRewardElement.hidden = true;
+            clearRewardTimer = 0;
+        }
+    }
     updateScenarioState(frameDt);
     if (scenarioResolved) return;
 
-    const gravityInterval = inputController.isSoftDropping()
-        ? dropInterval / 20
-        : dropInterval;
-    dropCounter += deltaTime;
-    if (dropCounter > gravityInterval) {
-        playerDrop(inputController.isSoftDropping());
-    }
-
-    if (player.matrix && pieceIsGrounded()) {
-        lockState = onGroundContact(lockState);
-        lockState = tickLock(lockState, frameDt);
-        player.lockTimer = lockState.timer;
-        if (lockState.shouldLock) {
-            lockPiece();
+    if (pendingClear) {
+        pendingClear.life -= frameDt;
+        for (const line of flashingLines) {
+            line.time = pendingClear.life;
         }
-    } else if (lockState.active) {
-        lockState = clearLock(lockState);
-        player.lockTimer = 0;
-    }
+        if (pendingClear.life <= 0) {
+            resolvePendingClear();
+            finishLockAfterSweep();
+        }
+    } else {
+        if (flashingLines.length) {
+            flashingLines = expireFlashingLines(flashingLines, frameDt);
+        }
 
-    if (comboTimer > 0) {
-        comboTimer -= deltaTime;
-        if (comboTimer <= 0) combo = 0;
+        const gravityInterval = inputController.isSoftDropping()
+            ? dropInterval / 20
+            : dropInterval;
+        if (isInstantGravity(gravityInterval)) {
+            dropCounter = 0;
+            while (player.matrix) {
+                const y = player.pos.y;
+                playerDrop(inputController.isSoftDropping());
+                if (!player.matrix || player.pos.y === y) break;
+            }
+        } else {
+            dropCounter += frameDt;
+            if (dropCounter > gravityInterval) {
+                playerDrop(inputController.isSoftDropping());
+                dropCounter = 0;
+            }
+        }
+
+        if (player.matrix && pieceIsGrounded()) {
+            lockState = onGroundContact(lockState);
+            lockState = tickLock(lockState, frameDt);
+            player.lockTimer = lockState.timer;
+            if (lockState.shouldLock) {
+                lockPiece();
+            }
+        } else if (lockState.active) {
+            lockState = clearLock(lockState);
+            player.lockTimer = 0;
+        }
     }
 
     updateScore();
@@ -1025,28 +1497,70 @@ function cancelScheduledUpdate() {
 }
 
 function updateScore() {
-    scoreElement.innerText = 'Score: ' + player.score;
-    levelElement.innerText = 'Level: ' + player.level;
-    linesElement.innerText = 'Lines: ' + player.lines;
-    const modeLabel = gameMode === 'sprint'
-        ? 'Sprint'
-        : (gameMode === 'versus' ? '2P · Versus AI' : (gameMode === 'scenario' ? 'Neon Circuit' : 'Marathon'));
-    modeElement.innerText = 'Mode: ' + modeLabel;
-    timerElement.innerText = 'Time: ' + formatElapsedTime(elapsedTime);
-    comboElement.innerText = 'Combo: ' + combo;
-    backToBackElement.innerText = 'B2B: ' + (backToBackActive ? 'Active' : 'Ready');
-    eventMessageElement.innerText = lastEventMessage || ' ';
-    opponentLinesElement.innerText = 'AI LINES ' + String(opponent.lines).padStart(2, '0');
-    opponentGarbageElement.innerText = 'AI INCOMING ' + String(opponent.pendingGarbage).padStart(2, '0');
-    playerGarbageElement.innerText = 'YOU INCOMING ' + String(playerPendingGarbage).padStart(2, '0');
+    scoreElement.innerText = String(player.score);
+    levelElement.innerText = String(player.level);
+    linesElement.innerText = String(player.lines);
+    modeElement.innerText = MODE_LABELS[gameMode] || 'Marathon';
+    timerElement.innerText = formatElapsedTime(elapsedTime);
+    comboElement.innerText = String(combo);
+    comboElement.closest('.status-row')?.classList.toggle('is-hot', combo >= 3);
+    backToBackElement.innerText = b2bChain >= 2
+        ? `x${b2bChain}`
+        : (backToBackActive ? 'Active' : 'Ready');
+    backToBackElement.closest('.status-row')?.classList.toggle('is-hot', b2bChain >= 2);
+    const showFlow = gameMode === 'marathon';
+    if (flowRow) flowRow.hidden = !showFlow;
+    if (showFlow && flowValueElement && flowMeterFill) {
+        const flowPct = Math.round(flowMeter);
+        flowValueElement.innerText = `${flowPct}%`;
+        flowMeterFill.style.width = `${flowPct}%`;
+    }
+    eventMessageElement.innerText = lastEventMessage || '—';
+    eventMessageElement.classList.toggle(
+        'is-big',
+        /TETRIS|PERFECT|T-SPIN|COMBO RUSH|FLOW MAX/.test(lastEventMessage || ''),
+    );
+    opponentLinesElement.innerText = String(opponent.lines).padStart(2, '0');
+    opponentGarbageElement.innerText = String(opponent.pendingGarbage).padStart(2, '0');
+    playerGarbageElement.innerText = String(playerPendingGarbage).padStart(2, '0');
     opponentGarbageMeter.style.width = `${opponent.pendingGarbage / MAX_PENDING_GARBAGE * 100}%`;
     playerGarbageMeter.style.width = `${playerPendingGarbage / MAX_PENDING_GARBAGE * 100}%`;
     const scenarioActive = gameMode === 'scenario' && Boolean(activeScenarioStage);
-    scenarioObjective.hidden = !scenarioActive;
+    const marathonActive = gameMode === 'marathon';
+    const lineGoal = modeLineGoal();
+    const showObjective = scenarioActive || marathonActive || lineGoal != null
+        || gameMode === 'tutorial' || gameMode === 'cheese';
+    scenarioObjective.hidden = !showObjective;
     if (scenarioActive) {
         scenarioObjective.textContent = activeScenarioStage.kind === 'lines'
             ? `OBJECTIVE ${Math.min(player.lines, activeScenarioStage.lineGoal)} / ${activeScenarioStage.lineGoal}`
             : 'OBJECTIVE DEFEAT RIVAL';
+    } else if (gameMode === 'tutorial') {
+        scenarioObjective.textContent = tutorialObjectiveText();
+    } else if (marathonActive) {
+        const lv = Math.min(player.level, MARATHON_TARGET_LEVEL);
+        scenarioObjective.textContent = `CLEAR LV ${lv} / ${MARATHON_TARGET_LEVEL}`;
+    } else if (gameMode === 'cheese') {
+        const garbageRows = arena.filter(row => row.includes(8)).length;
+        scenarioObjective.textContent = `DIG ${garbageRows} GARBAGE`;
+    } else if (lineGoal != null) {
+        scenarioObjective.textContent = `CLEAR ${Math.min(player.lines, lineGoal)} / ${lineGoal}`;
+    }
+
+    const paceKey = gameMode === 'daily' ? 'daily' : (gameMode === 'sprint' ? 'sprint' : (gameMode === 'marathon' ? 'marathon' : null));
+    if (paceGhostElement) {
+        if (!paceKey || !meta.pace[paceKey]?.length) {
+            paceGhostElement.hidden = true;
+        } else {
+            const pbVal = paceValueAt(meta.pace[paceKey], elapsedTime);
+            const nowVal = gameMode === 'marathon' ? player.level : player.lines;
+            const delta = nowVal - pbVal;
+            const unit = gameMode === 'marathon' ? 'LV' : 'L';
+            paceGhostElement.hidden = false;
+            paceGhostElement.textContent = delta === 0
+                ? `PB PACE · even`
+                : (delta > 0 ? `PB PACE · +${delta}${unit}` : `PB PACE · ${delta}${unit}`);
+        }
     }
 }
 
@@ -1113,6 +1627,7 @@ function completeScenarioStage() {
         return false;
     }
     scenarioProgress = candidate;
+    persistRunStats({incrementGames: true});
     showScenarioResult(true, stars);
     return true;
 }
@@ -1124,6 +1639,7 @@ function failScenarioStage(title) {
     cancelScheduledUpdate();
     stopBGM();
     touchControls.hidden = true;
+    persistRunStats({incrementGames: true});
     showScenarioResult(false, 0, title);
     return true;
 }
@@ -1200,8 +1716,23 @@ function leaveScenarioForMap() {
     showScenarioMap();
 }
 
+function currentBoardMode() {
+    if (startScreen.style.display !== 'none') {
+        return gameModeSelect.value || 'marathon';
+    }
+    return gameMode || gameModeSelect.value || 'marathon';
+}
+
+function persistRunStats({incrementGames = false} = {}) {
+    if (incrementGames && !runStatsSaved) {
+        meta = noteRunEnd(meta);
+    }
+    writeMeta(meta);
+    runStatsSaved = true;
+}
+
 function updateLeaderboard() {
-    renderLeaderboard(leaderboardElement, readLeaderboard());
+    renderLeaderboard(leaderboardElement, readLeaderboard(localStorage, currentBoardMode()));
 }
 
 function showStartScreen() {
@@ -1222,7 +1753,12 @@ function showStartScreen() {
         : scenarioProgress.completed
         ? 'CHAMPION · 5/5 STAGES'
         : `STAGE ${String(unlockedStage.id).padStart(2, '0')} · ${unlockedStage.rival}`;
-    openModal('start-screen-title', scenarioContinueBtn);
+    selectGameMode(gameModeSelect.value);
+    refreshPbSummary();
+    refreshFirstRunNudge();
+    renderCosmeticPickers();
+    applyCosmetics();
+    openModal('start-screen-title', startGameBtn);
 }
 
 function exitApplication() {
@@ -1239,6 +1775,39 @@ function exitApplication() {
     }, 0);
 }
 
+function renderPauseControls() {
+    if (!pauseControls) return;
+    pauseControls.replaceChildren();
+    for (const row of controlLegendRows(settings.bindings)) {
+        const dt = document.createElement('dt');
+        dt.textContent = row.label;
+        const dd = document.createElement('dd');
+        dd.textContent = row.keys;
+        pauseControls.append(dt, dd);
+    }
+}
+
+function refreshFirstRunNudge() {
+    if (!firstRunNudge) return;
+    firstRunNudge.hidden = Boolean(meta.stats.tutorialDone);
+}
+
+let unlockToastTimer = 0;
+function showUnlockToast(unlocks) {
+    if (!unlockToast || !unlocks?.length) return;
+    unlockToast.hidden = false;
+    unlockToast.textContent = `UNLOCKED · ${formatUnlocks(unlocks)}`;
+    unlockToast.classList.remove('is-on');
+    void unlockToast.offsetWidth;
+    unlockToast.classList.add('is-on');
+    sounds.unlock?.();
+    window.clearTimeout(unlockToastTimer);
+    unlockToastTimer = window.setTimeout(() => {
+        unlockToast.classList.remove('is-on');
+        unlockToast.hidden = true;
+    }, 2800);
+}
+
 function showPauseScreen() {
     touchControls.hidden = true;
     startScreen.style.display = 'none';
@@ -1246,15 +1815,17 @@ function showPauseScreen() {
     gameOverScreen.style.display = 'none';
     leaderboardScreen.style.display = 'none';
     pauseScreen.style.display = 'block';
+    renderPauseControls();
     openModal('pause-screen-title', resumeGameBtn);
 }
 
-function showHighScoreModal(title = 'Game Over!') {
+function showHighScoreModal(title = 'Game Over') {
     isGameOver = true;
     touchControls.hidden = true;
     sounds.gameOver();
+    persistRunStats({incrementGames: true});
 
-    const scores = readLeaderboard();
+    const scores = readLeaderboard(localStorage, currentBoardMode());
     const topScore = scores.length > 0 ? scores[0].score : 0;
 
     startScreen.style.display = 'none';
@@ -1263,9 +1834,15 @@ function showHighScoreModal(title = 'Game Over!') {
     gameOverScreen.style.display = 'block';
     gameOverTitleElement.innerText = title;
     finalScoreElement.innerText = player.score;
+    if (title === 'Game Over' && runGradeElement) {
+        runGradeElement.hidden = true;
+        runGradeElement.textContent = '';
+        runGradeElement.dataset.grade = '';
+        runGradeElement.classList.remove('is-pb');
+    }
 
     if (player.score > topScore || scores.length < 5) {
-        document.getElementById('high-score-input-group').style.display = 'block';
+        document.getElementById('high-score-input-group').style.display = 'grid';
     } else {
         document.getElementById('high-score-input-group').style.display = 'none';
     }
@@ -1276,13 +1853,14 @@ function showHighScoreModal(title = 'Game Over!') {
 saveScoreBtn.addEventListener('click', () => {
     const name = nicknameInput.value.trim() || 'Anonymous';
     const newScore = { name, score: player.score };
+    const mode = currentBoardMode();
 
-    let scores = readLeaderboard();
+    let scores = readLeaderboard(localStorage, mode);
     scores.push(newScore);
     scores.sort((a, b) => b.score - a.score);
     scores = scores.slice(0, 5);
 
-    writeLeaderboard(scores);
+    writeLeaderboard(scores, localStorage, mode);
     updateLeaderboard();
 
     gameOverScreen.style.display = 'none';
@@ -1292,14 +1870,14 @@ saveScoreBtn.addEventListener('click', () => {
     showStartScreen();
 });
 
-startGameBtn.addEventListener('click', () => {
+function beginSelectedRun() {
     cancelScheduledUpdate();
     if (audioCtx) {
         void audioCtx.resume().catch(() => {});
     }
     startBGM();
     gameMode = gameModeSelect.value;
-    opponentPanel.style.display = gameMode === 'versus' ? 'block' : 'none';
+    opponentPanel.style.display = gameMode === 'versus' ? 'flex' : 'none';
     gameContainer.classList.toggle('versus-active', gameMode === 'versus');
     gameContainer.classList.remove('play-enter');
     void gameContainer.offsetWidth;
@@ -1310,12 +1888,45 @@ startGameBtn.addEventListener('click', () => {
     closeModal();
     startScreen.style.display = 'none';
     touchControls.hidden = false;
+    if (runGradeElement) {
+        runGradeElement.hidden = true;
+        runGradeElement.textContent = '';
+    }
     resetGameState();
     emitMatchEvent('match-start');
-    gameOverTitleElement.innerText = 'Game Over!';
+    gameOverTitleElement.innerText = 'Game Over';
     playerReset();
     lastTime = performance.now();
     scheduleUpdate();
+}
+
+startGameBtn.addEventListener('click', beginSelectedRun);
+
+menuTutorialBtn?.addEventListener('click', () => {
+    selectGameMode('tutorial');
+    beginSelectedRun();
+});
+firstRunTutorialBtn?.addEventListener('click', () => {
+    selectGameMode('tutorial');
+    beginSelectedRun();
+});
+
+cosmeticFrames?.addEventListener('change', event => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement) || input.name !== 'cosmetic-frame') return;
+    if (!meta.unlocks.frames.includes(input.value)) return;
+    meta.unlocks.selectedFrame = input.value;
+    writeMeta(meta);
+    applyCosmetics();
+});
+
+cosmeticClears?.addEventListener('change', event => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement) || input.name !== 'cosmetic-clear') return;
+    if (!meta.unlocks.clears.includes(input.value)) return;
+    meta.unlocks.selectedClear = input.value;
+    writeMeta(meta);
+    applyCosmetics();
 });
 
 scenarioContinueBtn.addEventListener('click', () => {
@@ -1397,7 +2008,7 @@ viewLeaderboardBtn.addEventListener('click', () => {
     pauseScreen.style.display = 'none';
     gameOverScreen.style.display = 'none';
     leaderboardScreen.style.display = 'block';
-    renderLeaderboard(leaderboardList, readLeaderboard());
+    renderLeaderboard(leaderboardList, readLeaderboard(localStorage, gameModeSelect.value || 'marathon'));
     openModal('leaderboard-screen-title', closeLeaderboardBtn);
 });
 
@@ -1519,7 +2130,7 @@ function resetOpponentState() {
 
 function resetGameState() {
     arena.forEach(row => row.fill(0));
-    pieceQueue.reset();
+    configureRunSeedAndQueue();
     inputController.reset();
     lockState = createLockState(settings.timing.lockDelay);
     player.pos = {x: 0, y: 0};
@@ -1539,14 +2150,28 @@ function resetGameState() {
     dropCounter = 0;
     combo = 0;
     comboTimer = 0;
+    b2bChain = 0;
+    flowMeter = 0;
+    paceSamples = [];
+    lastPaceSampleAt = 0;
+    tutorialStep = 0;
     shakeTime = 0;
     flashingLines = [];
+    pendingClear = null;
+    runStatsSaved = false;
     dropInterval = scenarioDropInterval();
     elapsedTime = 0;
     backToBackActive = false;
+    if (gameMode === 'cheese') addGarbageLines(arena, 10);
     lastActionWasRotate = false;
     lastEventMessage = '';
     eventMessageTimer = 0;
+    clearRewardTimer = 0;
+    if (clearRewardElement) {
+        clearRewardElement.classList.remove('is-on');
+        clearRewardElement.hidden = true;
+        clearRewardElement.textContent = '';
+    }
     playerPendingGarbage = 0;
     matchEventLog = [];
     scenarioHazardTimer = gameMode === 'scenario'
@@ -1564,20 +2189,28 @@ function resetGameState() {
 function playerHold() {
     if (!player.canHold || !player.matrix || isPaused || isGameOver) return;
 
+    if (gameMode === 'tutorial' && tutorialStep === 2) {
+        tutorialStep = 3;
+        lastEventMessage = 'TUTORIAL · Hold OK';
+        eventMessageTimer = 1600;
+        updateScore();
+        checkTutorialCompletion();
+        if (isGameOver) return;
+    }
+
     lastActionWasRotate = false;
-    const currentPiece = player.matrix.map(row => [...row]);
-    const currentRotation = player.rotation ?? 0;
+    const currentType = pieceTypeFromMatrix(player.matrix);
+    if (!currentType) return;
     if (player.hold === null) {
-        player.hold = currentPiece;
-        player.holdRotation = currentRotation;
+        player.hold = createPiece(currentType);
+        player.holdRotation = initialRotationFor(currentType);
         playerReset();
     } else {
-        const holdPiece = player.hold;
-        const holdRotation = player.holdRotation ?? 0;
-        player.hold = currentPiece;
-        player.holdRotation = currentRotation;
-        player.matrix = holdPiece.map(row => [...row]);
-        player.rotation = holdRotation;
+        const holdType = pieceTypeFromMatrix(player.hold);
+        player.hold = createPiece(currentType);
+        player.holdRotation = initialRotationFor(currentType);
+        player.matrix = createPiece(holdType);
+        player.rotation = initialRotationFor(holdType);
         player.lastRotateUsedKick = false;
         player.pos.y = 0;
         player.pos.x = (arena[0].length / 2 | 0) - (player.matrix[0].length / 2 | 0);
@@ -1598,7 +2231,7 @@ function playerHold() {
 }
 
 function togglePause() {
-    if (!player.matrix || isGameOver) return;
+    if (!canPauseGame()) return;
 
     isPaused = !isPaused;
     if (isPaused) {
@@ -1666,8 +2299,13 @@ document.addEventListener('keydown', event => {
     else if (action === 'rotateCW') playerRotate(1);
     else if (action === 'rotateCCW') playerRotate(-1);
     else if (action === 'rotate180') {
-        playerRotate(1);
-        playerRotate(1);
+        if (!player.matrix) return;
+        const result = tryRotate180(arena, player, collide);
+        lastActionWasRotate = result.ok;
+        if (result.ok) {
+            sounds.rotate();
+            refreshLockAfterMove();
+        }
     } else if (action === 'hold') playerHold();
     else if (action === 'quit') quitGame();
 });
@@ -1687,7 +2325,7 @@ function quitGame() {
 }
 
 pauseGameBtn.addEventListener('click', () => {
-    if (!player.matrix || isGameOver) return;
+    if (!canPauseGame()) return;
     if (!isPaused) togglePause();
 });
 exitGameBtn.addEventListener('click', quitGame);
@@ -1698,18 +2336,20 @@ const exposed = {
     gameOverTitleElement, gameOverScreen, startScreen, pauseScreen, settingsScreen, modalOverlay,
     calculateGarbageAttack, scoreLines, createPiece, createMatrix,
     chooseOpponentMove, evaluateOpponentBoard, nextPieceType, initialRotationFor,
-    detectTSpin, isPerfectClear, tryRotateSrs,
+    detectTSpin, isPerfectClear, tryRotateSrs, tryRotate180,
     endVersusMatch, resetGameState, clearFullRows, addGarbageLines,
     collide, merge, rotate,
-    nextOpponentPieceType, resetOpponentState, arenaSweep,
+    nextOpponentPieceType, resetOpponentState, arenaSweep, flushPendingClear,
     readLeaderboard, writeLeaderboard, renderLeaderboard,
-    shuffleBag, emitMatchEvent, playerReset, playerHold, playerMove,
+    shuffleBag, emitMatchEvent, playerReset, playerHold, playerMove, emitHorizontal,
     playerRotate, playerDrop, playerHardDrop, lockPiece, lockCurrentPiece,
     queueGarbageForOpponent, queueGarbageForPlayer, runOpponentTurn, runOpponentTurnsAfterLock,
-    checkSprintCompletion, showHighScoreModal, showStartScreen, showPauseScreen, exitApplication,
+    checkSprintCompletion, checkMarathonCompletion, checkCheeseCompletion, checkTutorialCompletion, showHighScoreModal, showStartScreen, showPauseScreen, exitApplication,
+    readMeta, writeMeta, recordRun, noteRunEnd, dailySeed, mulberry32, createBagFactory, paceValueAt,
     showSettings, closeSettings, syncSettingsUI, trapFocus,
+    showUnlockToast, formatRunGrade, punchClear,
     createLockState, onGroundContact, tickLock, clearLock,
-    togglePause, quitGame, returnToMenu, selectGameMode, canAcceptGameInput, update, formatElapsedTime,
+    togglePause, quitGame, returnToMenu, selectGameMode, canAcceptGameInput, canPauseGame, update, formatElapsedTime,
     createScenarioProgress, readScenarioProgress, writeScenarioProgress, renderScenarioMap,
     showScenarioMap, showScenarioBriefing, startScenarioStage, canPlayScenarioStage,
     completeScenarioLineProgress, updateScenarioState, completeScenarioStage,
@@ -1718,7 +2358,8 @@ const exposed = {
     opponentPlayActive, scenarioUpgradeEffects,
     themeMelody, themeMelodyName,
     isBgmRunning: isBGMRunning,
-    PIECE_TYPES, SPRINT_TARGET_LINES, VERSUS_WIDTH, VERSUS_HEIGHT, MAX_PENDING_GARBAGE,
+    PIECE_TYPES, SPRINT_TARGET_LINES, MARATHON_TARGET_LEVEL, MARATHON_CLEAR_BONUS,
+    VERSUS_WIDTH, VERSUS_HEIGHT, MAX_PENDING_GARBAGE,
     SOFT_DROP_POINT, HARD_DROP_POINT,
     SCENARIO_STAGES, SCENARIO_UPGRADES, starsForScenarioStage,
 };
@@ -1729,11 +2370,14 @@ const liveState = {
     combo: [() => combo, (v) => { combo = v; }],
     comboTimer: [() => comboTimer, (v) => { comboTimer = v; }],
     backToBackActive: [() => backToBackActive, (v) => { backToBackActive = v; }],
+    b2bChain: [() => b2bChain, (v) => { b2bChain = v; }],
+    flowMeter: [() => flowMeter, (v) => { flowMeter = v; }],
     playerPendingGarbage: [() => playerPendingGarbage, (v) => { playerPendingGarbage = v; }],
     lastEventMessage: [() => lastEventMessage, (v) => { lastEventMessage = v; }],
     elapsedTime: [() => elapsedTime, (v) => { elapsedTime = v; }],
     matchEventLog: [() => matchEventLog, (v) => { matchEventLog = v; }],
     flashingLines: [() => flashingLines, (v) => { flashingLines = v; }],
+    pendingClear: [() => pendingClear, (v) => { pendingClear = v; }],
     gameMode: [() => gameMode, (v) => { gameMode = v; }],
     shakeTime: [() => shakeTime, (v) => { shakeTime = v; }],
     animationFrameId: [() => animationFrameId, (v) => { animationFrameId = v; }],
@@ -1748,6 +2392,10 @@ const liveState = {
     lockState: [() => lockState, (v) => { lockState = v; }],
     settings: [() => settings, (v) => { settings = v; }],
     lastActionWasRotate: [() => lastActionWasRotate, (v) => { lastActionWasRotate = v; }],
+    tutorialStep: [() => tutorialStep, (v) => { tutorialStep = v; }],
+    activeSeed: [() => activeSeed, (v) => { activeSeed = v; }],
+    paceSamples: [() => paceSamples, (v) => { paceSamples = v; }],
+    meta: [() => meta, (v) => { meta = v; }],
 };
 
 const testMode = new URLSearchParams(location.search).has('test');
@@ -1762,6 +2410,9 @@ if (testMode) {
 
 //Initialize Game
 restorePreferences();
+selectGameMode(gameModeSelect.value);
+applyCosmetics();
+refreshPbSummary();
 showStartScreen();
 updateScore();
 updateLeaderboard();

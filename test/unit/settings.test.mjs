@@ -26,6 +26,38 @@ test('applyPreset guideline overwrites bindings', () => {
     assert.deepEqual(s.bindings, GUIDELINE_BINDINGS);
 });
 
+test('classic and guideline presets bind 180 to A', () => {
+    assert.deepEqual(CLASSIC_BINDINGS.rotate180, ['KeyA']);
+    assert.deepEqual(GUIDELINE_BINDINGS.rotate180, ['KeyA']);
+    assert.deepEqual(normalizeSettings({}).bindings.rotate180, ['KeyA']);
+});
+
+test('normalizeSettings fills empty rotate180 with A when A is free', () => {
+    const s = normalizeSettings({
+        version: 2,
+        preset: 'classic',
+        bindings: {
+            ...CLASSIC_BINDINGS,
+            rotate180: [],
+        },
+    });
+    assert.deepEqual(s.bindings.rotate180, ['KeyA']);
+});
+
+test('normalizeSettings does not steal A when it is already bound', () => {
+    const s = normalizeSettings({
+        version: 2,
+        preset: 'custom',
+        bindings: {
+            ...CLASSIC_BINDINGS,
+            rotate180: [],
+            hold: ['KeyA'],
+        },
+    });
+    assert.deepEqual(s.bindings.rotate180, []);
+    assert.deepEqual(s.bindings.hold, ['KeyA']);
+});
+
 test('assignBinding swaps on conflict', () => {
     let s = normalizeSettings({});
     const formerHold = [...s.bindings.hold];

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createPiece, createMatrix, collide, cloneMatrix, rotate } from '../../src/js/board.js';
 import { VERSUS_WIDTH, VERSUS_HEIGHT } from '../../src/js/constants.js';
-import { tryRotateSrs } from '../../src/js/srs.js';
+import { tryRotateSrs, tryRotate180 } from '../../src/js/srs.js';
 
 function emptyArena() {
     return createMatrix(VERSUS_WIDTH, VERSUS_HEIGHT);
@@ -69,6 +69,28 @@ test('tryRotateSrs restores pose when every kick fails', () => {
     assert.deepEqual(player.pos, posBefore);
     assert.deepEqual(player.matrix, matrixBefore);
     assert.equal(player.lastRotateUsedKick, false);
+});
+
+test('tryRotate180 turns T-like A from R0 to R2 without a leftover 90 pose', () => {
+    const arena = emptyArena();
+    const player = makePlayer('A', {x: 4, y: 6, rotation: 0});
+    const result = tryRotate180(arena, player, collide);
+    assert.deepEqual(result, {ok: true, usedKick: false});
+    assert.equal(player.rotation, 2);
+    assert.equal(collide(arena, player), false);
+});
+
+test('tryRotate180 restores the original pose when every kick fails', () => {
+    const arena = emptyArena();
+    for (const row of arena) row.fill(8);
+    const player = makePlayer('A', {x: 4, y: 8, rotation: 1});
+    const matrixBefore = cloneMatrix(player.matrix);
+    const posBefore = {x: player.pos.x, y: player.pos.y};
+    const result = tryRotate180(arena, player, collide);
+    assert.deepEqual(result, {ok: false, usedKick: false});
+    assert.equal(player.rotation, 1);
+    assert.deepEqual(player.pos, posBefore);
+    assert.deepEqual(player.matrix, matrixBefore);
 });
 
 test('tryRotateSrs rotates D (O-like) in place with zero offsets', () => {

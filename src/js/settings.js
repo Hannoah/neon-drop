@@ -7,7 +7,7 @@ export const CLASSIC_BINDINGS = {
     hardDrop: ['Space'],
     rotateCW: ['ArrowUp'],
     rotateCCW: [],
-    rotate180: [],
+    rotate180: ['KeyA'],
     hold: ['KeyC'],
     pause: ['KeyP', 'Escape'],
     quit: ['KeyQ'],
@@ -20,7 +20,7 @@ export const GUIDELINE_BINDINGS = {
     hardDrop: ['Space'],
     rotateCW: ['KeyX', 'ArrowUp'],
     rotateCCW: ['KeyZ'],
-    rotate180: [],
+    rotate180: ['KeyA'],
     hold: ['KeyC'],
     pause: ['KeyP', 'Escape'],
     quit: ['KeyQ'],
@@ -42,6 +42,17 @@ function cloneBindings(bindings) {
     return Object.fromEntries(
         BINDING_ACTIONS.map(action => [action, [...(bindings[action] ?? [])]]),
     );
+}
+
+function usedBindingCodes(bindings) {
+    return new Set(BINDING_ACTIONS.flatMap(action => bindings[action] ?? []));
+}
+
+function ensureDefault180(bindings) {
+    if (bindings.rotate180.length > 0) return bindings;
+    if (usedBindingCodes(bindings).has('KeyA')) return bindings;
+    bindings.rotate180 = ['KeyA'];
+    return bindings;
 }
 
 export function clampTiming(timing) {
@@ -69,6 +80,7 @@ export function normalizeSettings(raw) {
     } else {
         bindings = cloneBindings(CLASSIC_BINDINGS);
     }
+    bindings = ensureDefault180(bindings);
 
     return {
         version: 2,

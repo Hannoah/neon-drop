@@ -8,6 +8,9 @@ const root = __dirname;
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
 };
 
 function createServer() {
@@ -116,7 +119,7 @@ async function testModalAccessibility(browser, url) {
     labelledBy: 'start-screen-title',
     gameInert: true,
     touchInert: true,
-    focused: 'scenario-continue-btn',
+    focused: 'start-game-btn',
   });
   assert.equal(pageErrors.length, 0, 'opening the start dialog must not throw');
   await page.close();
@@ -331,8 +334,8 @@ async function testScenarioMap(browser, url) {
     localStorage.setItem('neonDropScenario', JSON.stringify(progress));
     localStorage.setItem('neonDropPreferences', '{"mode":"sprint","bgm":false,"sfx":true}');
     localStorage.setItem('tetrisLeaderboard', JSON.stringify({
-      generation: 2,
-      scores: [{name: 'KEEP', score: 77}],
+      generation: 3,
+      boards: { marathon: [{name: 'KEEP', score: 77}] },
     }));
     return {
       preferences: localStorage.getItem('neonDropPreferences'),
@@ -720,8 +723,8 @@ async function testScenarioLineStages(browser, url) {
     scoreLines(1, false);
     return {scenarioLevel2, cryoLevel1, marathonLevel2: dropInterval};
   });
-  assert.deepEqual(ramp, {scenarioLevel2: 840, cryoLevel1: 1100, marathonLevel2: 900},
-    'scenario ramps and Cryo must apply only in campaign while Marathon keeps its normal step');
+  assert.deepEqual(ramp, {scenarioLevel2: 840, cryoLevel1: 1100, marathonLevel2: 1030},
+    'scenario ramps and Cryo apply in campaign; Marathon uses a gentler gravity curve');
 
   const hazard = await page.evaluate(() => {
     window.requestAnimationFrame = () => 777;
@@ -834,9 +837,10 @@ async function testScenarioLineStages(browser, url) {
   });
 
   await page.locator('#scenario-map-back-btn').click();
+  await page.locator('[data-mode-card="versus"]').click();
   await page.getByRole('button', { name: 'Play' }).click();
   assert.equal(await page.locator('#scenario-objective').isHidden(), true,
-    'quick play must hide the campaign objective');
+    'Versus quick play must hide the campaign/rank objective');
   assert.equal(pageErrors.length, 0, 'campaign line stages must not throw page errors');
   await page.close();
 }
@@ -1316,8 +1320,8 @@ async function testCampaignMenuExit(browser, url) {
     'the initial menu must offer Circuit for Neon Circuit');
   assert.equal(await page.locator('#start-screen #menu-exit-btn').getAttribute('aria-label'), 'Exit Game',
     'the initial-menu Exit Game action must use its own ID');
-  assert.equal(await page.evaluate(() => document.activeElement?.id), 'scenario-continue-btn',
-    'the campaign card must receive initial dialog focus');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'start-game-btn',
+    'Play must receive initial dialog focus');
 
   await page.evaluate(() => { window.confirm = () => false; });
   await page.locator('#menu-exit-btn').click();
@@ -1356,8 +1360,8 @@ async function testCampaignMenuExit(browser, url) {
   await page.locator('#exit-return-btn').click();
   assert.equal(await page.locator('#start-screen').isVisible(), true,
     'Return to Menu must restore the initial menu');
-  assert.equal(await page.evaluate(() => document.activeElement?.id), 'scenario-continue-btn',
-    'Return to Menu must restore Circuit button focus');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'start-game-btn',
+    'Return to Menu must restore Play button focus');
   assert.equal(pageErrors.length, 0, 'campaign menu exit must not throw');
   await page.close();
 }
@@ -1405,6 +1409,20 @@ async function testLayoutSizing(browser, url) {
   const { page, pageErrors } = await openPage(browser, url);
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.reload();
+
+  const menuFit = await page.evaluate(() => {
+    const screen = document.getElementById('start-screen');
+    return {
+      overflowY: getComputedStyle(screen).overflowY,
+      fits: screen.scrollHeight <= screen.clientHeight + 1,
+      pageFits: document.documentElement.scrollHeight <= innerHeight,
+      bodyOverflow: getComputedStyle(document.body).overflowY,
+    };
+  });
+  assert.equal(menuFit.fits, true, '1280x720 title screen must fit without an inner scrollbar');
+  assert.equal(menuFit.pageFits, true, '1280x720 title screen must not scroll the page');
+  assert.equal(menuFit.bodyOverflow, 'hidden', 'title screen must lock page overflow');
+
   await page.getByRole('button', { name: 'Play' }).click();
 
   const single = await page.evaluate(() => {
@@ -1708,7 +1726,7 @@ async function testLeaderboardSafety(browser, url) {
     'legacy array leaderboards must be wiped');
   assert.deepEqual(
     await page.evaluate(() => JSON.parse(localStorage.getItem('tetrisLeaderboard'))),
-    { generation: 2, scores: [] },
+    { generation: 3, boards: {} },
     'legacy array leaderboards must be rewritten with the current generation',
   );
 
@@ -1724,15 +1742,15 @@ async function testLeaderboardSafety(browser, url) {
     'foreign generation leaderboards must be wiped');
   assert.deepEqual(
     await page.evaluate(() => JSON.parse(localStorage.getItem('tetrisLeaderboard'))),
-    { generation: 2, scores: [] },
-    'foreign generation leaderboards must be rewritten empty at generation 2',
+    { generation: 3, boards: {} },
+    'foreign generation leaderboards must be rewritten empty at generation 3',
   );
 
   await page.evaluate(() => localStorage.setItem(
     'tetrisLeaderboard',
     JSON.stringify({
-      generation: 2,
-      scores: [{ name: '<b>name</b>', score: 100 }],
+      generation: 3,
+      boards: { marathon: [{ name: '<b>name</b>', score: 100 }] },
     }),
   ));
   await page.reload();
@@ -1757,8 +1775,8 @@ async function testScoreSave(browser, url) {
   await page.getByRole('button', { name: 'Save Score' }).click();
 
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('tetrisLeaderboard')));
-  assert.equal(saved.generation, 2);
-  assert.deepEqual(saved.scores[0], { name: 'AI_Agent', score: 321 });
+  assert.equal(saved.generation, 3);
+  assert.deepEqual(saved.boards.marathon[0], { name: 'AI_Agent', score: 321 });
   assert.equal(await page.locator('#start-screen').isVisible(), true, 'saving a score returns to the menu');
   assert.equal(pageErrors.length, 0, 'score saving must not throw');
   await page.close();
@@ -1827,9 +1845,13 @@ async function testGameplayEnhancements(browser, url) {
   assert.equal(new Set(bag).size, 7, 'each 7-bag must contain every piece once');
 
   const scoring = await page.evaluate(() => {
+    gameMode = 'sprint';
     player.score = 0;
     player.level = 1;
+    player.lines = 0;
     combo = 0;
+    b2bChain = 0;
+    flowMeter = 0;
     backToBackActive = false;
     scoreLines(4, 'none');
     return {
@@ -1838,14 +1860,18 @@ async function testGameplayEnhancements(browser, url) {
       event: lastEventMessage,
     };
   });
-  assert.equal(scoring.score, 800, 'a Tetris must award 800 points at level 1');
+  assert.equal(scoring.score, 1400, 'a Tetris must award base 800 plus multi-clear bounty at level 1');
   assert.equal(scoring.backToBack, true, 'a Tetris must enable Back-to-back');
-  assert.equal(scoring.event, 'TETRIS', 'a Tetris must expose an event message');
+  assert.match(scoring.event, /TETRIS/, 'a Tetris must expose an event message');
 
   const tSpin = await page.evaluate(() => {
+    gameMode = 'sprint';
     player.score = 0;
     player.level = 1;
+    player.lines = 0;
     combo = 0;
+    b2bChain = 0;
+    flowMeter = 0;
     backToBackActive = false;
     scoreLines(2, 'full');
     return {
@@ -1853,8 +1879,8 @@ async function testGameplayEnhancements(browser, url) {
       event: lastEventMessage,
     };
   });
-  assert.equal(tSpin.score, 1200, 'a T-Spin double must award 1200 points at level 1');
-  assert.equal(tSpin.event, 'T-SPIN DOUBLE', 'a T-Spin double must expose an event message');
+  assert.equal(tSpin.score, 1320, 'a T-Spin double must award 1200 plus double bounty at level 1');
+  assert.match(tSpin.event, /T-SPIN DOUBLE/, 'a T-Spin double must expose an event message');
 
   const tSpinNoLine = await page.evaluate(() => {
     const previousMode = gameMode;
@@ -1883,6 +1909,55 @@ async function testGameplayEnhancements(browser, url) {
   });
   assert.equal(sprint, true, 'Sprint must complete at 40 lines');
   assert.equal(await page.locator('#game-over-title').innerText(), 'Sprint Complete!');
+
+  await page.locator('#game-over-menu-btn').click();
+  await page.locator('[data-mode-card="marathon"]').click();
+  await page.getByRole('button', { name: 'Play' }).click();
+  const marathonGoal = await page.evaluate(() => ({
+    objective: document.querySelector('#scenario-objective')?.textContent,
+    hidden: document.querySelector('#scenario-objective')?.hidden,
+    target: MARATHON_TARGET_LEVEL,
+  }));
+  assert.equal(marathonGoal.hidden, false, 'Marathon must show a clear objective');
+  assert.match(marathonGoal.objective || '', /CLEAR LV/, 'Marathon objective must track level clear');
+  assert.equal(marathonGoal.target, 15, 'Marathon clear target must be level 15');
+
+  const marathonClear = await page.evaluate(() => {
+    player.level = MARATHON_TARGET_LEVEL;
+    player.score = 1000;
+    return {
+      done: checkMarathonCompletion(),
+      score: player.score,
+      bonus: MARATHON_CLEAR_BONUS,
+    };
+  });
+  assert.equal(marathonClear.done, true, 'Marathon must complete at the target level');
+  assert.equal(marathonClear.score, 1000 + marathonClear.bonus, 'Marathon clear must grant a finish bonus');
+  assert.equal(await page.locator('#game-over-title').innerText(), 'Marathon Clear!');
+
+  await page.locator('#game-over-menu-btn').click();
+  await page.locator('[data-mode-card="daily"]').click();
+  await page.getByRole('button', { name: 'Play' }).click();
+  const daily = await page.evaluate(() => {
+    const seed = dailySeed();
+    pieceQueue.reset();
+    pieceQueue.setBagFactory(createBagFactory(mulberry32(seed)));
+    const first = pieceQueue.preview(7).join('');
+    pieceQueue.reset();
+    pieceQueue.setBagFactory(createBagFactory(mulberry32(seed)));
+    const second = pieceQueue.preview(7).join('');
+    return {
+      seed: activeSeed,
+      today: seed,
+      objective: document.querySelector('#scenario-objective')?.textContent,
+      sameBag: first === second,
+      favicon: document.querySelector('link[rel="icon"]')?.getAttribute('href'),
+    };
+  });
+  assert.equal(daily.seed, daily.today, 'Daily mode must lock the UTC day seed');
+  assert.equal(daily.sameBag, true, 'Daily bags must be deterministic for the day seed');
+  assert.match(daily.objective || '', /CLEAR/, 'Daily must show a clear objective');
+  assert.equal(daily.favicon, 'favicon.svg', 'page must use the Ink favicon');
   assert.equal(pageErrors.length, 0, 'gameplay enhancements must not throw');
 
   await page.close();
@@ -1961,8 +2036,8 @@ async function testVersusMode(browser, url) {
     };
   });
   assert.deepEqual(pressureHud, {
-    aiText: 'AI INCOMING 05',
-    playerText: 'YOU INCOMING 03',
+    aiText: '05',
+    playerText: '03',
     aiMeter: '25%',
     playerMeter: '15%',
   }, 'Versus pressure must be readable as text and a visual meter');
@@ -2124,6 +2199,7 @@ async function testScenarioRivalsAndUpgrades(browser, url) {
     player.matrix = createPiece('D');
     player.pos = {x: 5, y: 18};
     lockCurrentPiece();
+    flushPendingClear();
     return {before, after: opponent.pieceBag.length};
   });
   assert.deepEqual(lockIntegration, {before: 4, after: 2},
@@ -2202,8 +2278,8 @@ async function testScenarioRivalsAndUpgrades(browser, url) {
     return {positive, zeroAttack, marathonScore, versusScore: player.score, versusAttack: opponent.pendingGarbage};
   });
   assert.deepEqual(pulse, {
-    positive: {score: 420, pending: 3}, zeroAttack: 0,
-    marathonScore: 300, versusScore: 300, versusAttack: 1,
+    positive: {score: 588, pending: 3}, zeroAttack: 0,
+    marathonScore: 420, versusScore: 420, versusAttack: 1,
   }, 'Pulse must multiply scenario scoring and boost only positive attacks');
 
   const firewall = await page.evaluate(() => {
@@ -2233,7 +2309,7 @@ async function testScenarioRivalsAndUpgrades(browser, url) {
   });
   assert.deepEqual(firewall, {
     initial: 2,
-    first: {charges: 1, pending: 0, unchanged: true, event: 'FIREWALL BLOCK', timer: 2000, hud: 'YOU INCOMING 00'},
+    first: {charges: 1, pending: 0, unchanged: true, event: 'FIREWALL BLOCK', timer: 2000, hud: '00'},
     second: {charges: 0, pending: 0, unchanged: true},
     third: {charges: 0, pending: 0, garbageRows: [11, 11]},
     retryCharges: 2,
@@ -2291,16 +2367,16 @@ async function testNextFivePreview(browser, url) {
     return {
       count: types.length,
       types,
-      height: canvas.height,
-      width: canvas.width,
+      height: canvas.clientHeight,
+      width: canvas.clientWidth,
       visible: canvas.offsetParent !== null,
       label: panel?.querySelector('h3, .panel-title, span')?.textContent?.trim() || panel?.textContent?.trim()?.slice(0, 24),
     };
   });
   assert.equal(preview.count, 5, 'Next queue must expose five upcoming pieces');
   assert.equal(preview.types.length, 5, 'Next 5 preview data must contain five piece types');
-  assert.equal(preview.height, 400, 'Next canvas must be tall enough for a five-piece stack');
-  assert.equal(preview.width, 80, 'Next canvas width must remain the preview rail size');
+  assert.ok(preview.height >= 160, 'Next canvas must be tall enough for a five-piece stack');
+  assert.ok(preview.width >= 64, 'Next canvas width must remain the preview rail size');
   assert.equal(preview.visible, true, 'Next canvas must be visible during play');
   assert.equal(pageErrors.length, 0, 'Next 5 preview must not throw');
   await page.close();
@@ -2484,11 +2560,11 @@ async function testUsabilityUI(browser, url) {
     'the start screen must explain Sprint with a selectable mode card');
   assert.equal(await page.locator('[data-mode-card="versus"]').count(), 1,
     'the start screen must explain Versus with a selectable mode card');
-  await page.getByRole('button', { name: /Sprint.*40 lines/i }).click();
+  await page.getByRole('button', { name: 'Sprint', exact: true }).click();
   assert.equal(await page.locator('#game-mode').inputValue(), 'sprint',
     'selecting a mode card must update the game mode');
   await page.keyboard.press('Enter');
-  assert.equal(await page.locator('#mode').innerText(), 'Mode: Sprint',
+  assert.equal(await page.locator('#mode').innerText(), 'Sprint',
     'Enter must start the selected mode from the menu');
 
   assert.equal(await page.locator('#pause-game-btn').count(), 1,
@@ -2534,6 +2610,191 @@ async function testUsabilityUI(browser, url) {
   await page.close();
 }
 
+async function testReviewFixes(browser, url) {
+  const { page, pageErrors } = await openPage(browser, url);
+  await page.locator('[data-mode-card="twentyg"]').click();
+  await page.getByRole('button', { name: 'Play' }).click();
+
+  const twentyG = await page.evaluate(() => {
+    arena.forEach(row => row.fill(0));
+    player.matrix = createPiece('D');
+    player.pos = {x: 5, y: 0};
+    dropInterval = 1;
+    dropCounter = 0;
+    lastTime = 0;
+    update(16);
+    player.pos.y++;
+    const wouldCollide = collide(arena, player);
+    player.pos.y--;
+    return {y: player.pos.y, wouldCollide};
+  });
+  assert.equal(twentyG.wouldCollide, true, '20G must drop the piece to the ground in one frame');
+  assert.ok(twentyG.y > 10, '20G must travel more than one cell per frame');
+
+  await page.evaluate(() => returnToMenu());
+  await page.locator('[data-mode-card="cheese"]').click();
+  await page.getByRole('button', { name: 'Play' }).click();
+
+  const cheese = await page.evaluate(() => {
+    arena.forEach(row => row.fill(0));
+    addGarbageLines(arena, 10, () => 0);
+    player.lines = 40;
+    const stillCheese = checkCheeseCompletion();
+    arena.forEach(row => row.fill(0));
+    const dugOut = checkCheeseCompletion();
+    return {
+      stillCheese,
+      dugOut,
+      title: gameOverTitleElement.innerText,
+    };
+  });
+  assert.equal(cheese.stillCheese, false, 'Cheese must not clear while garbage remains');
+  assert.equal(cheese.dugOut, true, 'Cheese must clear when no garbage cells remain');
+  assert.equal(cheese.title, 'Cheese Clear!');
+
+  await page.evaluate(() => {
+    isGameOver = false;
+    isPaused = false;
+    pendingClear = {tSpin: 'none', rowCount: 1, ys: [19], life: 400};
+    player.matrix = null;
+    togglePause();
+  });
+  assert.equal(await page.evaluate(() => isPaused), true,
+    'Pause must work during a line-clear flash');
+
+  await page.evaluate(() => returnToMenu());
+  await page.getByRole('button', { name: 'Play' }).click();
+
+  const hold = await page.evaluate(() => {
+    arena.forEach(row => row.fill(0));
+    isGameOver = false;
+    player.canHold = true;
+    player.hold = null;
+    player.matrix = createPiece('A');
+    player.rotation = 0;
+    player.pos = {x: 4, y: 4};
+    playerRotate(1);
+    const rotated = player.matrix.map(row => [...row]);
+    playerHold();
+    return {
+      hold: player.hold,
+      spawn: createPiece('A'),
+      rotated,
+      rotation: player.holdRotation,
+    };
+  });
+  assert.deepEqual(hold.hold, hold.spawn, 'Hold must store the spawn orientation');
+  assert.notDeepEqual(hold.rotated, hold.spawn, 'setup must have rotated the live piece');
+
+  await page.evaluate(() => returnToMenu());
+  await page.getByRole('button', { name: 'Play' }).click();
+
+  const metaTopOut = await page.evaluate(() => {
+    localStorage.removeItem('neonDropMeta');
+    meta = readMeta();
+    meta.stats.tetrises = 3;
+    meta.stats.maxCombo = 6;
+    showHighScoreModal();
+    return JSON.parse(localStorage.getItem('neonDropMeta'));
+  });
+  assert.equal(metaTopOut.stats.tetrises, 3, 'top-out must persist tetris counts');
+  assert.equal(metaTopOut.stats.maxCombo, 6, 'top-out must persist max combo');
+  assert.equal(metaTopOut.stats.games, 1, 'top-out must count as a game');
+
+  await page.evaluate(() => returnToMenu());
+  await page.getByRole('button', { name: 'Play' }).click();
+
+  const arrZero = await page.evaluate(() => {
+    arena.forEach(row => row.fill(0));
+    isGameOver = false;
+    isPaused = false;
+    player.matrix = createPiece('D');
+    player.pos = {x: 5, y: 0};
+    inputController.reset();
+    inputController.setTiming({das: 50, arr: 0});
+    inputController.press('moveLeft', emitHorizontal);
+    inputController.tick(50, emitHorizontal);
+    return player.pos.x;
+  });
+  assert.equal(arrZero, 0, 'ARR 0 must slide to the wall after DAS');
+
+  assert.equal(pageErrors.length, 0, 'review fixes must not throw');
+  await page.close();
+}
+
+async function testArcadeFeel(browser, url) {
+  const { page, pageErrors } = await openPage(browser, url);
+  await page.evaluate(() => {
+    localStorage.removeItem('neonDropMeta');
+    meta = readMeta();
+    showStartScreen();
+  });
+
+  const menu = await page.evaluate(() => ({
+    rotate180: settings.bindings.rotate180,
+    playHint: document.getElementById('play-mode-hint')?.textContent,
+    nudgeHidden: document.getElementById('first-run-nudge')?.hidden,
+    daily: document.querySelector('[data-mode-card="daily"] span')?.textContent,
+  }));
+  assert.deepEqual(menu.rotate180, ['KeyA'], '180 must be bound to A out of the box');
+  assert.equal(menu.playHint, 'Marathon', 'Play CTA must name the selected mode');
+  assert.equal(menu.nudgeHidden, false, 'first-run tutorial nudge must show for new players');
+  assert.match(menu.daily, /h left/, 'Daily card must show time until the next UTC seed');
+
+  await page.locator('[data-mode-card="sprint"]').click();
+  assert.equal(
+    await page.locator('#play-mode-hint').textContent(),
+    'Sprint',
+    'Play CTA must follow the selected mode',
+  );
+
+  await page.getByRole('button', { name: 'Play' }).click();
+  const punchTarget = await page.evaluate(() => {
+    punchClear(4);
+    return {
+      board: document.querySelector('#player-panel .board-stage')?.classList.contains('clear-punch'),
+      hud: document.getElementById('game-container')?.classList.contains('clear-punch'),
+    };
+  });
+  assert.equal(punchTarget.board, true, 'clear punch must hit the board, not the whole HUD');
+  assert.equal(punchTarget.hud, false, 'HUD scale punch makes the shell look cheap');
+
+  await page.evaluate(() => {
+    isGameOver = false;
+    isPaused = false;
+    player.matrix = createPiece('D');
+    togglePause();
+  });
+  const pauseKeys = await page.locator('#pause-controls').innerText();
+  assert.match(pauseKeys, /ROTATE/);
+  assert.match(pauseKeys, /A/);
+  assert.match(pauseKeys, /HOLD/);
+
+  await page.evaluate(() => returnToMenu());
+  const toast = await page.evaluate(() => {
+    showUnlockToast(['frame:gold']);
+    const el = document.getElementById('unlock-toast');
+    return {hidden: el.hidden, text: el.textContent, on: el.classList.contains('is-on')};
+  });
+  assert.equal(toast.hidden, false, 'unlock toast must appear');
+  assert.match(toast.text, /Gold Frame/);
+  assert.equal(toast.on, true);
+
+  await page.evaluate(() => {
+    meta = {...readMeta(), stats: {...readMeta().stats, tutorialDone: true}};
+    writeMeta(meta);
+    showStartScreen();
+  });
+  assert.equal(
+    await page.evaluate(() => document.getElementById('first-run-nudge')?.hidden),
+    true,
+    'tutorial nudge must hide after the tutorial is done',
+  );
+
+  assert.equal(pageErrors.length, 0, 'arcade feel pass must not throw');
+  await page.close();
+}
+
 (async () => {
   const server = createServer();
   const browser = await chromium.launch({ headless: true });
@@ -2574,6 +2835,8 @@ async function testUsabilityUI(browser, url) {
     await testVersusMode(browser, url);
     await testScenarioRivalsAndUpgrades(browser, url);
     await testUsabilityUI(browser, url);
+    await testReviewFixes(browser, url);
+    await testArcadeFeel(browser, url);
     console.log('All Neon Drop tests passed.');
   } finally {
     await browser.close();

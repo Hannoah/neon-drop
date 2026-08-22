@@ -22,6 +22,9 @@ import {
     rotate,
     merge,
     formatElapsedTime,
+    pieceTypeFromMatrix,
+    initialRotationFor,
+    hasGarbage,
 } from '../../src/js/board.js';
 
 test('shuffleBag returns all seven piece types', () => {
@@ -185,4 +188,29 @@ test('formatElapsedTime formats milliseconds as MM:SS', () => {
     assert.equal(formatElapsedTime(5999), '00:05');
     assert.equal(formatElapsedTime(65000), '01:05');
     assert.equal(formatElapsedTime(3600000), '60:00');
+});
+
+test('pieceTypeFromMatrix reads the spawn letter from cell values', () => {
+    assert.equal(pieceTypeFromMatrix(createPiece('A')), 'A');
+    assert.equal(pieceTypeFromMatrix(createPiece('S')), 'S');
+    const rotated = createPiece('B');
+    rotate(rotated, 1);
+    assert.equal(pieceTypeFromMatrix(rotated), 'B');
+    assert.equal(pieceTypeFromMatrix([[0, 0], [0, 0]]), undefined);
+});
+
+test('initialRotationFor matches non-Guideline spawn matrices', () => {
+    assert.equal(initialRotationFor('A'), 0);
+    assert.equal(initialRotationFor('B'), 3);
+    assert.equal(initialRotationFor('C'), 1);
+    assert.equal(initialRotationFor('S'), 3);
+});
+
+test('hasGarbage is true only while garbage cells remain', () => {
+    const board = createMatrix(4, 3);
+    assert.equal(hasGarbage(board), false);
+    board[2][1] = 8;
+    assert.equal(hasGarbage(board), true);
+    board[2][1] = 1;
+    assert.equal(hasGarbage(board), false, 'player blocks are not cheese garbage');
 });

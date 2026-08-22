@@ -64,14 +64,17 @@ export function createInputController({das, arr}) {
                     remaining -= dasRemaining;
                     dasRemaining = 0;
                     dasComplete = true;
+                    if (timing.arr === 0) {
+                        while (emit(repeatDir)) { /* slide to wall */ }
+                        return;
+                    }
                     emit(repeatDir);
-                    if (timing.arr === 0) return;
                     arrRemaining = timing.arr;
                     continue;
                 }
 
                 if (timing.arr === 0) {
-                    emit(repeatDir);
+                    while (emit(repeatDir)) { /* already sliding; later ticks probe */ }
                     return;
                 }
 

@@ -1,12 +1,16 @@
 import { PIECE_SHAPES, PIECE_TYPES } from './constants.js';
 
-export function shuffleBag() {
+export function shuffleBag(random = Math.random) {
     const bag = PIECE_TYPES.split('');
     for (let index = bag.length - 1; index > 0; index--) {
-        const swapIndex = Math.floor(Math.random() * (index + 1));
+        const swapIndex = Math.floor(random() * (index + 1));
         [bag[index], bag[swapIndex]] = [bag[swapIndex], bag[index]];
     }
     return bag;
+}
+
+export function createBagFactory(random = Math.random) {
+    return () => shuffleBag(random);
 }
 
 export function cloneBoard(board) {
@@ -112,4 +116,26 @@ export function formatElapsedTime(elapsedTime) {
     const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
     const seconds = String(totalSeconds % 60).padStart(2, '0');
     return `${minutes}:${seconds}`;
+}
+
+export function pieceTypeFromMatrix(matrix) {
+    if (!matrix) return undefined;
+    for (const row of matrix) {
+        for (const value of row) {
+            if (value) return PIECE_TYPES[value - 1];
+        }
+    }
+    return undefined;
+}
+
+/** Spawn matrices for B/C/S are not Guideline R0. */
+export function initialRotationFor(type) {
+    if (type === 'B') return 3;
+    if (type === 'C') return 1;
+    if (type === 'S') return 3;
+    return 0;
+}
+
+export function hasGarbage(board) {
+    return board.some(row => row.includes(8));
 }

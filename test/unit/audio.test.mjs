@@ -56,3 +56,12 @@ test('drop sound uses a short triangle tone instead of a harsh sine buzz', () =>
 
     assert.equal(system.audioCtx.oscillators.at(-1).type, 'triangle');
 });
+
+test('fanfare plays a stacked triad for tetris clears', () => {
+    const system = createAudioSystem(toggle(), toggle());
+    const before = system.audioCtx.oscillators.length;
+    system.sounds.fanfare('tetris');
+    assert.ok(system.audioCtx.oscillators.length > before);
+    assert.ok(system.sounds.hardDrop);
+    assert.ok(system.sounds.unlock);
+});

@@ -34,14 +34,25 @@ test('DAS elapsed without press emit still repeats after delay', () => {
     assert.ok(moves.filter(m => m === 'moveLeft').length >= 1);
 });
 
-test('ARR zero emits every tick after DAS', () => {
+test('ARR zero slides until emit returns false after DAS', () => {
     const input = createInputController({das: 50, arr: 0});
     const moves = [];
+    let room = 10;
     input.press('moveRight');
-    input.tick(50, action => moves.push(action));
-    input.tick(16, action => moves.push(action));
-    input.tick(16, action => moves.push(action));
-    assert.deepEqual(moves, ['moveRight', 'moveRight', 'moveRight']);
+    input.tick(50, action => {
+        moves.push(action);
+        room -= 1;
+        return room > 0;
+    });
+    assert.equal(moves.length, 10, 'one post-DAS tick must travel to the wall');
+    assert.ok(moves.every(action => action === 'moveRight'));
+
+    const extra = [];
+    input.tick(16, action => {
+        extra.push(action);
+        return false;
+    });
+    assert.deepEqual(extra, ['moveRight'], 'later ticks still probe once, then stop');
 });
 
 test('most recent horizontal press wins over opposite hold', () => {

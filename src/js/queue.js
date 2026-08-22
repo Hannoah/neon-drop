@@ -1,9 +1,10 @@
 import { shuffleBag } from './board.js';
 
 export function createPieceQueue(bagFactory = shuffleBag) {
+    let factory = bagFactory;
     const buffer = [];
     function ensure(min) {
-        while (buffer.length < min) buffer.push(...bagFactory());
+        while (buffer.length < min) buffer.push(...factory());
     }
     return {
         next() {
@@ -17,6 +18,10 @@ export function createPieceQueue(bagFactory = shuffleBag) {
             return buffer.slice(0, count);
         },
         reset() {
+            buffer.length = 0;
+        },
+        setBagFactory(nextFactory) {
+            factory = nextFactory || shuffleBag;
             buffer.length = 0;
         },
     };
