@@ -2073,7 +2073,9 @@ settingsLanguage.addEventListener('change', () => {
 });
 
 function refreshLanguage() {
-    document.documentElement.lang = getLanguage();
+    const lang = getLanguage();
+    document.documentElement.lang = lang;
+    document.body.classList.toggle('lang-ko', lang === 'ko');
     applyTranslations();
     syncSettingsUI();
     selectGameMode(gameModeSelect.value);
