@@ -1291,12 +1291,7 @@ async function testAnimationFrameScheduling(browser, url) {
 
 async function testExitGame(browser, url) {
   const { page, pageErrors } = await openPage(browser, url);
-  const dialogs = [];
   let mainFrameNavigations = 0;
-  page.on('dialog', async dialog => {
-    dialogs.push(dialog.type());
-    await dialog.accept();
-  });
   page.on('framenavigated', frame => {
     if (frame === page.mainFrame()) mainFrameNavigations++;
   });
@@ -1305,11 +1300,22 @@ async function testExitGame(browser, url) {
   await page.locator('#exit-game-btn').click();
   await page.waitForTimeout(100);
 
-  assert.deepEqual(dialogs, ['confirm'], 'Exit Game must use only one confirmation dialog');
+  assert.equal(await page.locator('#quit-confirm-screen').isVisible(), true,
+    'Exit Game must show the in-game quit confirmation modal');
+  await page.locator('#quit-confirm-yes-btn').click();
+
   assert.equal(mainFrameNavigations, 0, 'Exit Game must not navigate away from the game page');
   assert.equal(await page.locator('#start-screen').isVisible(), true, 'Exit Game must return to the start screen');
   assert.equal(await page.evaluate(() => player.matrix), null, 'Exit Game must reset the active piece');
   assert.equal(page.url(), url, 'Exit Game must keep the game page open');
+
+  await page.getByRole('button', { name: 'Play' }).click();
+  await page.locator('#exit-game-btn').click();
+  assert.equal(await page.locator('#quit-confirm-screen').isVisible(), true);
+  await page.locator('#quit-confirm-no-btn').click();
+  assert.equal(await page.locator('#quit-confirm-screen').isVisible(), false);
+  assert.equal(await page.evaluate(() => isPaused), false, 'cancelling quit must resume gameplay');
+
   assert.equal(pageErrors.length, 0, 'Exit Game must not throw');
   await page.close();
 }
