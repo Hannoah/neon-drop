@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="favicon.svg">
+    <meta name="theme-color" content="#121212">
+    <title>Neon Drop</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="src/css/shell.css">
+</head>
+<body>
+    <div id="game-container">
+        <header id="arena-header">
+            <div class="brand-lockup"><strong>NEON DROP</strong><span data-i18n="ARCADE">ARCADE</span></div>
+            <div class="match-meta">
+                <span id="mode" data-i18n="Marathon">Marathon</span>
+                <span class="meta-dot" aria-hidden="true">·</span>
+                <span id="timer">00:00</span>
+                <span id="scenario-objective" hidden data-i18n="OBJECTIVE 0 / 8">OBJECTIVE 0 / 8</span>
+                <span id="pace-ghost" hidden data-i18n="PB —">PB —</span>
+            </div>
+            <nav class="header-actions" aria-label="Game options" data-i18n-aria-label="Game options">
+                <button type="button" id="pause-game-btn" aria-label="Pause game" data-i18n-aria-label="Pause game" data-i18n="Pause">Pause</button>
+                <button class="btn-exit" id="exit-game-btn" aria-label="Exit Game" data-i18n-aria-label="Exit Game" data-i18n="Exit">Exit</button>
+            </nav>
+        </header>
+
+        <aside id="preview-rail" aria-label="Hold and next pieces" data-i18n-aria-label="Hold and next pieces">
+            <div class="preview-stack">
+                <div class="panel-box panel-box--hold">
+                    <div class="panel-label" data-i18n="Hold">Hold</div>
+                    <canvas id="hold" width="80" height="80"></canvas>
+                </div>
+                <div class="panel-box panel-box--next">
+                    <div class="panel-label" data-i18n="Next">Next</div>
+                    <canvas id="next" width="80" height="400"></canvas>
+                </div>
+            </div>
+        </aside>
+
+        <div id="opponent-panel" aria-label="AI opponent" data-i18n-aria-label="AI opponent" style="display: none;">
+            <div class="board-label" data-i18n="AI RIVAL">AI RIVAL</div>
+            <div class="board-stage">
+                <canvas id="opponent-board" width="240" height="400"></canvas>
+            </div>
+        </div>
+
+        <section id="versus-status" aria-label="Versus status" data-i18n-aria-label="Versus status">
+            <strong class="versus-mark" data-i18n="VS">VS</strong>
+            <div class="versus-divider"></div>
+            <div class="pressure-label" data-i18n="Rival lines">Rival lines</div>
+            <div id="opponent-lines">00</div>
+            <div class="pressure-label" data-i18n="Rival incoming">Rival incoming</div>
+            <div id="opponent-garbage">00</div>
+            <div class="garbage-meter" aria-hidden="true"><span id="opponent-garbage-meter"></span></div>
+            <div class="pressure-label" data-i18n="Your incoming">Your incoming</div>
+            <div id="player-garbage">00</div>
+            <div class="garbage-meter" aria-hidden="true"><span id="player-garbage-meter"></span></div>
+        </section>
+
+        <div id="player-panel">
+            <div class="board-label" data-i18n="YOU">YOU</div>
+            <div class="board-stage" style="position: relative;">
+                <canvas id="tetris" width="240" height="400"></canvas>
+                <p id="clear-reward" hidden aria-live="polite"></p>
+            </div>
+        </div>
+
+        <aside id="side-panel">
+            <div class="panel-box stats-panel">
+                <div class="panel-label" data-i18n="Score">Score</div>
+                <div id="score">0</div>
+                <div class="level-row"><span data-i18n="Level">Level</span> <span id="level">1</span></div>
+            </div>
+            <div class="panel-box meta-panel" aria-label="Match meta" data-i18n-aria-label="Match meta">
+                <div class="status-row"><span data-i18n="Lines">Lines</span><span id="lines">0</span></div>
+                <div class="status-row"><span data-i18n="Combo">Combo</span><span id="combo">0</span></div>
+                <div class="status-row"><span data-i18n="Back-to-Back">Back-to-Back</span><span id="back-to-back" data-i18n="Ready">Ready</span></div>
+                <div class="status-row" id="flow-row" hidden><span data-i18n="Flow">Flow</span>
+                    <span id="flow-value">0%</span>
+                    <div class="flow-meter" aria-hidden="true"><span id="flow-meter-fill"></span></div>
+                </div>
+                <div class="status-row"><span data-i18n="Event">Event</span><span id="event-message" aria-live="polite">—</span></div>
+            </div>
+        </aside>
+
+        <div id="leaderboard" class="visually-hidden" aria-hidden="true" data-i18n="Loading...">Loading...</div>
+    </div>
+    <div id="touch-controls" aria-label="Touch controls" data-i18n-aria-label="Touch controls" hidden>
+        <button id="touch-left" type="button" aria-label="Move left" data-i18n-aria-label="Move left">←</button>
+        <button id="touch-rotate" type="button" aria-label="Rotate piece" data-i18n-aria-label="Rotate piece">↻</button>
+        <button id="touch-right" type="button" aria-label="Move right" data-i18n-aria-label="Move right">→</button>
+        <button id="touch-down" type="button" aria-label="Soft drop" data-i18n-aria-label="Soft drop">↓</button>
+        <button id="touch-180" type="button" aria-label="Rotate 180" data-i18n-aria-label="Rotate 180">180</button>
+        <button id="touch-drop" type="button" aria-label="Hard drop" data-i18n-aria-label="Hard drop" data-i18n="Drop">Drop</button>
+        <button id="touch-hold" type="button" aria-label="Hold piece" data-i18n-aria-label="Hold piece" data-i18n="Hold">Hold</button>
+    </div>
+    <div id="modal-overlay" class="menu-enter" role="dialog" aria-modal="true" aria-labelledby="start-screen-title">
+        <div id="pause-screen" class="modal" style="display: none;">
+            <h2 id="pause-screen-title" data-i18n="Paused">Paused</h2>
+            <p class="pause-copy" data-i18n="Board is waiting.">Board is waiting.</p>
+            <dl id="pause-controls" class="control-legend"></dl>
+            <div class="pause-actions">
+                <button id="resume-game-btn" type="button" data-i18n="Resume">Resume</button>
+                <button id="pause-settings-btn" type="button" data-i18n="Settings">Settings</button>
+                <button id="quit-to-menu-btn" class="btn-exit" type="button" data-i18n="Quit to Menu">Quit to Menu</button>
+            </div>
+        </div>
+
+        <div id="start-screen" class="modal start-hero" style="display: block;">
+            <h2 id="start-screen-title" class="start-brand">Neon Drop</h2>
+            <p class="start-tagline" data-i18n="Fall. Clear. Repeat.">Fall. Clear. Repeat.</p>
+            <label for="game-mode" class="visually-hidden" data-i18n="Game mode">Game mode</label>
+            <select id="game-mode" class="visually-hidden" aria-label="Game mode" data-i18n-aria-label="Game mode">
+                <option value="marathon" data-i18n="Marathon">Marathon</option>
+                <option value="sprint" data-i18n="Sprint · 40 Lines">Sprint · 40 Lines</option>
+                <option value="versus" data-i18n="2P · Versus AI">2P · Versus AI</option>
+                <option value="daily" data-i18n="Daily Challenge">Daily Challenge</option>
+                <option value="cheese" data-i18n="Cheese">Cheese</option>
+                <option value="invisible" data-i18n="Invisible">Invisible</option>
+                <option value="twentyg">20G</option>
+                <option value="tutorial" data-i18n="Tutorial">Tutorial</option>
+            </select>
+            <div class="start-menu-list">
+                <div class="menu-section">
+                    <button id="start-game-btn" type="button"><span data-i18n="Play">Play</span> <small id="play-mode-hint" aria-hidden="true" data-i18n="Marathon">Marathon</small></button>
+                    <div id="first-run-nudge">
+                        <span data-i18n="New here? Tutorial takes about a minute.">New here? Tutorial takes about a minute.</span>
+                        <button type="button" id="first-run-tutorial-btn" data-i18n="Start Tutorial">Start Tutorial</button>
+                    </div>
+                </div>
+                <div class="menu-section">
+                    <div class="menu-section-label" data-i18n="Mode">Mode</div>
+                    <div class="mode-options" role="group" aria-label="Choose a ranked mode" data-i18n-aria-label="Choose a ranked mode">
+                        <button type="button" class="mode-card" data-mode-card="marathon" data-mode="marathon" aria-pressed="true"><strong data-i18n="Marathon">Marathon</strong><span aria-hidden="true" data-i18n="Clear Level 15 · graded">Clear Level 15 · graded</span></button>
+                        <button type="button" class="mode-card" data-mode-card="sprint" data-mode="sprint" aria-pressed="false"><strong data-i18n="Sprint">Sprint</strong><span aria-hidden="true" data-i18n="40 lines · graded PB">40 lines · graded PB</span></button>
+                        <button type="button" class="mode-card" data-mode-card="daily" data-mode="daily" aria-pressed="false"><strong data-i18n="Daily">Daily</strong><span aria-hidden="true" data-i18n="Seeded 40-line race">Seeded 40-line race</span></button>
+                        <button type="button" class="mode-card" data-mode-card="versus" data-mode="versus" aria-pressed="false"><strong data-i18n="Versus AI">Versus AI</strong><span aria-hidden="true" data-i18n="Garbage battle">Garbage battle</span></button>
+                        <button type="button" class="mode-card" data-mode-card="cheese" data-mode="cheese" aria-pressed="false"><strong data-i18n="Cheese">Cheese</strong><span aria-hidden="true" data-i18n="Dig through garbage">Dig through garbage</span></button>
+                        <button type="button" class="mode-card" data-mode-card="invisible" data-mode="invisible" aria-pressed="false"><strong data-i18n="Invisible">Invisible</strong><span aria-hidden="true" data-i18n="Locked stack stays dark">Locked stack stays dark</span></button>
+                        <button type="button" class="mode-card" data-mode-card="twentyg" data-mode="twentyg" aria-pressed="false">20G<span aria-hidden="true" data-i18n="Instant gravity">Instant gravity</span></button>
+                    </div>
+                </div>
+                <div class="menu-section">
+                    <button id="scenario-continue-btn" type="button">
+                        <strong data-i18n="Circuit">Circuit</strong>
+                        <small id="scenario-continue-detail" data-i18n="STAGE 01 · BYTE">STAGE 01 · BYTE</small>
+                    </button>
+                    <button id="menu-tutorial-btn" type="button" data-i18n="Tutorial">Tutorial</button>
+                    <button id="menu-settings-btn" type="button" data-i18n="Settings">Settings</button>
+                </div>
+                <p id="pb-summary"></p>
+                <div class="menu-section menu-section--quiet">
+                    <button id="view-leaderboard-btn" type="button" data-i18n="Leaderboard">Leaderboard</button>
+                    <button id="menu-exit-btn" class="btn-exit" type="button" aria-label="Exit Game" data-i18n-aria-label="Exit Game" data-i18n="Exit">Exit</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="settings-screen" class="modal" style="display: none;" aria-labelledby="settings-screen-title">
+            <h2 id="settings-screen-title" data-i18n="Settings">Settings</h2>
+            <label class="settings-language" for="settings-language"><span data-i18n="Language">Language</span>
+                <select id="settings-language"><option value="ko" lang="ko">한국어</option><option value="en" lang="en">English</option></select>
+            </label>
+            <fieldset>
+                <legend data-i18n="PRESET">PRESET</legend>
+                <div class="settings-presets" role="radiogroup" aria-label="Control preset" data-i18n-aria-label="Control preset">
+                    <label><input type="radio" name="control-preset" id="preset-classic" value="classic"> <span data-i18n="Classic">Classic</span></label>
+                    <label><input type="radio" name="control-preset" id="preset-guideline" value="guideline"> <span data-i18n="Guideline">Guideline</span></label>
+                </div>
+            </fieldset>
+            <div class="settings-bindings" role="group" aria-label="Key bindings" data-i18n-aria-label="Key bindings">
+                <div class="settings-binding-row"><span data-i18n="Move Left">Move Left</span><button type="button" data-rebind="moveLeft">ArrowLeft</button></div>
+                <div class="settings-binding-row"><span data-i18n="Move Right">Move Right</span><button type="button" data-rebind="moveRight">ArrowRight</button></div>
+                <div class="settings-binding-row"><span data-i18n="Soft Drop">Soft Drop</span><button type="button" data-rebind="softDrop">ArrowDown</button></div>
+                <div class="settings-binding-row"><span data-i18n="Hard Drop">Hard Drop</span><button type="button" data-rebind="hardDrop">Space</button></div>
+                <div class="settings-binding-row"><span data-i18n="Rotate CW">Rotate CW</span><button type="button" data-rebind="rotateCW">ArrowUp</button></div>
+                <div class="settings-binding-row"><span data-i18n="Rotate CCW">Rotate CCW</span><button type="button" data-rebind="rotateCCW">—</button></div>
+                <div class="settings-binding-row"><span data-i18n="Rotate 180">Rotate 180</span><button type="button" data-rebind="rotate180">KeyA</button></div>
+                <div class="settings-binding-row"><span data-i18n="Hold">Hold</span><button type="button" data-rebind="hold">KeyC</button></div>
+                <div class="settings-binding-row"><span data-i18n="Pause">Pause</span><button type="button" data-rebind="pause">KeyP, Escape</button></div>
+                <div class="settings-binding-row"><span data-i18n="Quit">Quit</span><button type="button" data-rebind="quit">KeyQ</button></div>
+            </div>
+            <div class="settings-timing">
+                <label for="settings-das">DAS <input type="range" id="settings-das" min="50" max="400" step="1" value="167"> <output id="settings-das-value" for="settings-das">167</output></label>
+                <label for="settings-arr">ARR <input type="range" id="settings-arr" min="0" max="100" step="1" value="33"> <output id="settings-arr-value" for="settings-arr">33</output></label>
+                <label for="settings-lock-delay"><span data-i18n="Lock">Lock</span> <input type="range" id="settings-lock-delay" min="100" max="1000" step="1" value="500"> <output id="settings-lock-delay-value" for="settings-lock-delay">500</output></label>
+            </div>
+            <fieldset>
+                <legend data-i18n="AUDIO">AUDIO</legend>
+                <div class="settings-audio">
+                    <label><input type="checkbox" id="bgm-toggle" checked> <span data-i18n="BGM">BGM</span></label>
+                    <label><input type="checkbox" id="sfx-toggle" checked> <span data-i18n="SFX">SFX</span></label>
+                </div>
+            </fieldset>
+            <fieldset>
+                <legend data-i18n="COSMETICS">COSMETICS</legend>
+                <div class="settings-presets" id="cosmetic-frames" role="radiogroup" aria-label="Board frame" data-i18n-aria-label="Board frame"></div>
+                <div class="settings-presets" id="cosmetic-clears" role="radiogroup" aria-label="Clear effect" data-i18n-aria-label="Clear effect" style="margin-top: 10px;"></div>
+            </fieldset>
+            <div class="scenario-actions">
+                <button id="settings-reset-btn" type="button" data-i18n="Reset Controls">Reset Controls</button>
+                <button id="settings-back-btn" type="button" data-i18n="Back">Back</button>
+            </div>
+        </div>
+
+        <div id="scenario-map-screen" class="modal" style="display: none;">
+            <h2 id="scenario-map-title" data-i18n="NEON CIRCUIT">NEON CIRCUIT</h2>
+            <div id="scenario-stage-list" aria-label="Campaign route" data-i18n-aria-label="Campaign route"></div>
+            <section id="scenario-stage-detail" aria-live="polite">
+                <p id="scenario-stage-rival"></p>
+                <h3 id="scenario-stage-name"></h3>
+                <p id="scenario-stage-objective"></p>
+                <p id="scenario-stage-modifier"></p>
+                <p id="scenario-stage-best"></p>
+            </section>
+            <div class="scenario-actions">
+                <button id="scenario-play-btn" type="button" data-i18n="View Briefing">View Briefing</button>
+                <button id="scenario-map-back-btn" type="button" data-i18n="Main Menu">Main Menu</button>
+                <button id="scenario-reset-btn" type="button" data-i18n="New Campaign">New Campaign</button>
+            </div>
+            <p id="scenario-reset-error" aria-live="polite"></p>
+        </div>
+
+        <div id="scenario-briefing-screen" class="modal" style="display: none;">
+            <h2 id="scenario-briefing-title" data-i18n="MISSION BRIEFING">MISSION BRIEFING</h2>
+            <dl>
+                <dt data-i18n="RIVAL">RIVAL</dt><dd id="scenario-briefing-rival"></dd>
+                <dt data-i18n="STAGE">STAGE</dt><dd id="scenario-briefing-name"></dd>
+                <dt data-i18n="OBJECTIVE">OBJECTIVE</dt><dd id="scenario-briefing-objective"></dd>
+                <dt data-i18n="MODIFIER">MODIFIER</dt><dd id="scenario-briefing-modifier"></dd>
+            </dl>
+            <div class="scenario-actions">
+                <button id="scenario-stage-start-btn" type="button" data-i18n="Start Stage">Start Stage</button>
+                <button id="scenario-briefing-back-btn" type="button" data-i18n="Back to Map">Back to Map</button>
+            </div>
+        </div>
+
+        <div id="scenario-result-screen" class="modal" style="display: none;" aria-labelledby="scenario-result-title">
+            <h2 id="scenario-result-title" data-i18n="STAGE CLEAR">STAGE CLEAR</h2>
+            <p id="scenario-result-stars" role="img" aria-label="0 of 3 stars" data-i18n-aria-label="0 of 3 stars"></p>
+            <p id="scenario-result-detail"></p>
+            <div class="scenario-actions">
+                <button id="scenario-reward-open-btn" type="button" style="display: none;" data-i18n="Choose Upgrade">Choose Upgrade</button>
+                <button id="scenario-retry-btn" type="button" data-i18n="Retry Stage">Retry Stage</button>
+                <button id="scenario-result-map-btn" type="button" data-i18n="Campaign Map">Campaign Map</button>
+            </div>
+        </div>
+
+        <div id="scenario-reward-screen" class="modal" style="display: none;" aria-labelledby="scenario-reward-title">
+            <h2 id="scenario-reward-title" data-i18n="CHOOSE YOUR UPGRADE">CHOOSE YOUR UPGRADE</h2>
+            <p id="scenario-reward-error" aria-live="polite"></p>
+            <div id="scenario-reward-options" class="scenario-actions"></div>
+        </div>
+
+        <div id="exit-screen" class="modal" style="display:none;">
+            <h2 id="exit-screen-title" data-i18n="Offline">Offline</h2>
+            <p data-i18n="Neon Drop has ended. You can close this tab.">Neon Drop has ended. You can close this tab.</p>
+            <button id="exit-return-btn" type="button" data-i18n="Return to Menu">Return to Menu</button>
+        </div>
+
+        <div id="game-over-screen" class="modal" style="display: none;">
+            <h2 id="game-over-title" data-i18n="Game Over">Game Over</h2>
+            <p id="run-grade" class="run-grade" hidden></p>
+            <p class="game-over-score"><span data-i18n="Score">Score</span> <strong id="final-score">0</strong></p>
+            <div id="high-score-input-group">
+                <input type="text" id="nickname" placeholder="Nickname" data-i18n-placeholder="Nickname" maxlength="10" aria-label="Nickname" data-i18n-aria-label="Nickname">
+                <button id="save-score-btn" type="button" data-i18n="Save Score">Save Score</button>
+            </div>
+            <div id="game-over-footer">
+                <button id="game-over-menu-btn" type="button" data-i18n="Main Menu">Main Menu</button>
+            </div>
+        </div>
+
+        <div id="leaderboard-screen" class="modal" style="display: none;">
+            <h2 id="leaderboard-screen-title" data-i18n="Leaderboard">Leaderboard</h2>
+            <div id="leaderboard-list"></div>
+            <button id="close-leaderboard-btn" type="button" data-i18n="Close">Close</button>
+        </div>
+    </div>
+    </div>
+    <div id="unlock-toast" hidden role="status" aria-live="polite"></div>
+    <script type="module" src="tetris.js?v=arcade1"></script>
+</body>
+</html>
