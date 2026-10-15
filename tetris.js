@@ -2,6 +2,7 @@ import {t, setLanguage, getLanguage} from './src/js/i18n.js';
 import {applyTranslations, setText, scenarioCopy, translateEvent} from './src/js/ui.js';
 import {
     PIECE_TYPES,
+    PIECE_COLORS,
     SPRINT_TARGET_LINES,
     MARATHON_TARGET_LEVEL,
     MARATHON_CLEAR_BONUS,
@@ -87,6 +88,8 @@ import {
     applyPreset,
     assignBinding,
 } from './src/js/settings.js';
+import { createParticleSystem } from './src/js/particles.js';
+import { createModalManager, trapFocus } from './src/js/modal.js';
 
 const canvas = document.getElementById('tetris');
 const context = canvas.getContext('2d');
@@ -160,6 +163,7 @@ const exitGameBtn = document.getElementById('exit-game-btn');
 const pauseGameBtn = document.getElementById('pause-game-btn');
 const pauseScreen = document.getElementById('pause-screen');
 const resumeGameBtn = document.getElementById('resume-game-btn');
+const pauseRestartBtn = document.getElementById('pause-restart-btn');
 const pauseSettingsBtn = document.getElementById('pause-settings-btn');
 const quitToMenuBtn = document.getElementById('quit-to-menu-btn');
 const settingsScreen = document.getElementById('settings-screen');
@@ -188,6 +192,7 @@ const eventMessageElement = document.getElementById('event-message');
 const clearRewardElement = document.getElementById('clear-reward');
 let clearRewardTimer = 0;
 const gameOverMenuBtn = document.getElementById('game-over-menu-btn');
+const playAgainBtn = document.getElementById('play-again-btn');
 const opponentCanvas = document.getElementById('opponent-board');
 const opponentContext = opponentCanvas.getContext('2d');
 const opponentPanel = document.getElementById('opponent-panel');
@@ -242,9 +247,10 @@ let paceSamples = [];
 let lastPaceSampleAt = 0;
 let tutorialStep = 0;
 let activeSeed = null;
-const RANKED_MODES = new Set(['marathon', 'sprint', 'versus', 'daily', 'cheese', 'invisible', 'twentyg', 'tutorial']);
+const RANKED_MODES = new Set(['marathon', 'sprint', 'ultra', 'versus', 'daily', 'cheese', 'invisible', 'twentyg', 'tutorial']);
 const MODE_LABELS = {
     sprint: 'Sprint',
+    ultra: 'Ultra',
     versus: 'Versus AI',
     scenario: 'Circuit',
     daily: 'Daily',
@@ -311,12 +317,14 @@ const player = {
     lockDelay: settings.timing.lockDelay,
 };
 
+const particles = createParticleSystem();
+
 const renderer = createRenderer({
     canvas, context, nextCanvas, nextContext, holdCanvas, holdContext,
     opponentCanvas, opponentContext, VERSUS_WIDTH, VERSUS_HEIGHT,
     setShakeTime: value => { shakeTime = value; },
     getState: () => ({
-        shakeTime, arena, player, combo, flashingLines,
+        shakeTime, arena, player, combo, flashingLines, particles,
         opponentActive: opponentPlayActive(), opponent,
         invisibleStack: gameMode === 'invisible',
     }),
@@ -497,55 +505,8 @@ function restorePreferences() {
     selectGameMode(gameModeSelect.value);
 }
 
-function openModal(labelId, focusTarget) {
-    if (modalOverlay.style.display !== 'flex') {
-        previousFocus = document.activeElement instanceof HTMLElement
-            ? document.activeElement
-            : null;
-    }
-    modalOverlay.style.display = 'flex';
-    modalOverlay.setAttribute('aria-labelledby', labelId);
-    gameContainer.inert = true;
-    touchControls.inert = true;
-    focusTarget.focus({ preventScroll: true });
-}
-
-function restorePreviousFocus() {
-    const target = previousFocus;
-    previousFocus = null;
-    if (
-        target &&
-        typeof target.focus === 'function' &&
-        target.isConnected &&
-        target.offsetParent !== null
-    ) {
-        target.focus();
-    }
-}
-
-function closeModal() {
-    modalOverlay.style.display = 'none';
-    gameContainer.inert = false;
-    touchControls.inert = false;
-    restorePreviousFocus();
-}
-
-function trapFocus(container, event) {
-    if (event.key !== 'Tab') return;
-    const nodes = [...container.querySelectorAll(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-    )].filter(n => !n.disabled && n.offsetParent !== null);
-    if (nodes.length === 0) return;
-    const first = nodes[0];
-    const last = nodes[nodes.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-    }
-}
+const modalManager = createModalManager({ modalOverlay, gameContainer, touchControls });
+const { openModal, closeModal, restorePreviousFocus } = modalManager;
 
 function settingsScreenOpen() {
     return settingsScreen.style.display !== 'none';
@@ -857,6 +818,7 @@ function showClearReward(points, rowCount, kind = 'clear') {
     clearRewardElement.textContent = kind === 'perfect' ? 'PERFECT'
         : kind === 'tetris' ? 'TETRIS'
         : kind === 'tspin' ? (lastEventMessage || 'T-SPIN')
+        : kind === 'combo' ? (combo >= 2 ? `COMBO x${combo}` : `+${points}`)
         : `+${points}`;
     clearRewardElement.textContent = translateEvent(clearRewardElement.textContent);
     clearRewardElement.classList.remove('is-on');
@@ -978,9 +940,15 @@ function scoreLines(rowCount, tSpinOrPivot = 'none', perfectClear = false) {
         eventMessageTimer = leveledUp || rushBonus > 0 || rowCount >= 3 ? 2400 : 2000;
     }
     const kind = fanfareKind({rowCount, tSpin, perfectClear, combo});
-    sounds.fanfare?.(kind);
+    sounds.fanfare?.(kind, {combo});
     if (rowCount > 0 && (kind === 'perfect' || kind === 'combo' || kind === 'clear')) {
         showClearReward(awarded, rowCount, kind);
+    }
+    if (perfectClear) {
+        particles.spawnSpecialBurst(VERSUS_WIDTH / 2, VERSUS_HEIGHT / 2, '#FF6A3D', 40);
+    }
+    if (leveledUp) {
+        sounds.levelUp?.();
     }
     updateScore();
     return player.score;
@@ -1075,11 +1043,19 @@ function arenaSweep(tSpinOrPivot = 'none', options = {}) {
     if (pendingClear) resolvePendingClear();
 
     const peak = beginClearFlash(ys, rowCount);
+    for (const y of ys) {
+        particles.spawnLineClear(y, arena[y]);
+    }
     sounds.clear(rowCount);
     punchClear(rowCount);
     const flashKind = fanfareKind({rowCount, tSpin, perfectClear: false, combo});
     if (flashKind === 'tetris' || flashKind === 'tspin') {
         showClearReward(1, rowCount, flashKind);
+    }
+    if (tSpin !== 'none') {
+        particles.spawnSpecialBurst(player.pos.x + 1.5, player.pos.y + 1.5, '#E06B7A', 25);
+    } else if (rowCount === 4) {
+        particles.spawnSpecialBurst(VERSUS_WIDTH / 2, ys[1] !== undefined ? ys[1] : 10, '#5BA4D9', 30);
     }
     if (rowCount >= 2) screenShake(2 + rowCount * 1.5);
 
@@ -1211,7 +1187,7 @@ function finishRankedRun(title, {awardClearBonus = false} = {}) {
         showHighScoreModal('Tutorial Complete!');
         return;
     }
-    if (['sprint', 'daily', 'marathon'].includes(gameMode)) {
+    if (['sprint', 'daily', 'marathon', 'ultra'].includes(gameMode)) {
         const result = recordRun(meta, {
             mode: gameMode,
             elapsedMs: elapsedTime,
@@ -1299,6 +1275,7 @@ function lockPiece() {
 
 function playerHardDrop() {
     let cells = 0;
+    const startY = player.pos.y;
     while (true) {
         player.pos.y++;
         if (collide(arena, player)) {
@@ -1309,6 +1286,23 @@ function playerHardDrop() {
     }
     player.score += HARD_DROP_POINT * cells;
     sounds.hardDrop?.();
+    if (cells > 0 && player.matrix) {
+        const cols = new Set();
+        const impactCells = [];
+        const pieceColor = PIECE_COLORS[player.matrix.flat().find(v => v !== 0) || 1] || '#FF6A3D';
+        for (let y = 0; y < player.matrix.length; y++) {
+            for (let x = 0; x < player.matrix[y].length; x++) {
+                if (player.matrix[y][x] !== 0) {
+                    const boardX = player.pos.x + x;
+                    const boardY = player.pos.y + y;
+                    cols.add(boardX);
+                    impactCells.push({x: boardX, y: boardY});
+                }
+            }
+        }
+        particles.spawnDropBeams?.(Array.from(cols), startY, player.pos.y, pieceColor);
+        particles.spawnGroundImpact?.(impactCells, pieceColor);
+    }
     // Tall hard-drops keep score; shake stays reserved for clears / level-ups.
     lockCurrentPiece();
     dropCounter = 0;
@@ -1394,6 +1388,16 @@ function update(time = 0) {
     });
 
     elapsedTime += frameDt;
+    particles.update(frameDt / 1000);
+
+    if (gameMode === 'ultra' && !isGameOver && !isPaused && player.matrix) {
+        if (elapsedTime >= 120000) {
+            elapsedTime = 120000;
+            updateScore();
+            finishRankedRun(t('Time Up!'));
+            return;
+        }
+    }
     if (['sprint', 'marathon', 'daily'].includes(gameMode) && elapsedTime - lastPaceSampleAt >= 1000) {
         lastPaceSampleAt = elapsedTime;
         paceSamples.push({
@@ -1487,13 +1491,22 @@ function updateScore() {
     levelElement.innerText = String(player.level);
     linesElement.innerText = String(player.lines);
     modeElement.innerText = t(MODE_LABELS[gameMode] || 'Marathon');
-    timerElement.innerText = formatElapsedTime(elapsedTime);
+    timerElement.innerText = gameMode === 'ultra'
+        ? formatElapsedTime(Math.max(0, 120000 - elapsedTime))
+        : formatElapsedTime(elapsedTime);
     comboElement.innerText = String(combo);
     comboElement.closest('.status-row')?.classList.toggle('is-hot', combo >= 3);
     backToBackElement.innerText = b2bChain >= 2
         ? `x${b2bChain}`
         : t(backToBackActive ? 'Active' : 'Ready');
     backToBackElement.closest('.status-row')?.classList.toggle('is-hot', b2bChain >= 2);
+    const playerStage = document.querySelector('#player-panel .board-stage');
+    if (playerStage) {
+        const isDanger = arena.slice(0, 6).some(row => row.some(cell => cell !== 0));
+        const isSurge = combo >= 2 || b2bChain >= 2 || (typeof flowMeter === 'number' && flowMeter >= 80);
+        playerStage.classList.toggle('is-danger', isDanger);
+        playerStage.classList.toggle('is-surge', isSurge && !isDanger);
+    }
     const showFlow = gameMode === 'marathon';
     if (flowRow) flowRow.hidden = !showFlow;
     if (showFlow && flowValueElement && flowMeterFill) {
@@ -1515,7 +1528,7 @@ function updateScore() {
     const marathonActive = gameMode === 'marathon';
     const lineGoal = modeLineGoal();
     const showObjective = scenarioActive || marathonActive || lineGoal != null
-        || gameMode === 'tutorial' || gameMode === 'cheese';
+        || gameMode === 'tutorial' || gameMode === 'cheese' || gameMode === 'ultra';
     scenarioObjective.hidden = !showObjective;
     if (scenarioActive) {
         scenarioObjective.textContent = activeScenarioStage.kind === 'lines'
@@ -1529,6 +1542,8 @@ function updateScore() {
     } else if (gameMode === 'cheese') {
         const garbageRows = arena.filter(row => row.includes(8)).length;
         scenarioObjective.textContent = t('DIG {rows} GARBAGE', {rows: garbageRows});
+    } else if (gameMode === 'ultra') {
+        scenarioObjective.textContent = t('2-min score attack');
     } else if (lineGoal != null) {
         scenarioObjective.textContent = t('CLEAR {value} / {goal}', {value: Math.min(player.lines, lineGoal), goal: lineGoal});
     }
@@ -1960,6 +1975,14 @@ bgmToggle.addEventListener('change', writePreferences);
 sfxToggle.addEventListener('change', writePreferences);
 
 gameOverMenuBtn.addEventListener('click', returnToMenu);
+playAgainBtn?.addEventListener('click', () => {
+    sounds.restart?.();
+    gameOverScreen.style.display = 'none';
+    closeModal();
+    resetGameState();
+    isGameOver = false;
+    beginSelectedRun();
+});
 
 Object.entries(touchActions).forEach(([id, action]) => {
     document.getElementById(id).addEventListener('click', () => {
@@ -2016,6 +2039,14 @@ resumeGameBtn.addEventListener('click', () => {
     touchControls.hidden = false;
     lastTime = performance.now();
     scheduleUpdate();
+});
+pauseRestartBtn?.addEventListener('click', () => {
+    sounds.restart?.();
+    isPaused = false;
+    closeModal();
+    pauseScreen.style.display = 'none';
+    resetGameState();
+    beginSelectedRun();
 });
 
 quitToMenuBtn.addEventListener('click', () => {
@@ -2140,6 +2171,8 @@ function resetGameState() {
     arena.forEach(row => row.fill(0));
     configureRunSeedAndQueue();
     inputController.reset();
+    particles.clear();
+    document.querySelector('#player-panel .board-stage')?.classList.remove('is-danger', 'is-surge');
     lockState = createLockState(settings.timing.lockDelay);
     player.pos = {x: 0, y: 0};
     player.matrix = null;
@@ -2266,6 +2299,29 @@ document.addEventListener('keydown', event => {
 
     if (isEditableTarget(event.target)) return;
 
+    if (event.code === 'KeyR' && !event.repeat) {
+        if (isPaused) {
+            event.preventDefault();
+            sounds.restart?.();
+            isPaused = false;
+            closeModal();
+            pauseScreen.style.display = 'none';
+            resetGameState();
+            beginSelectedRun();
+            return;
+        }
+        if (isGameOver && gameOverScreen.style.display !== 'none') {
+            event.preventDefault();
+            sounds.restart?.();
+            gameOverScreen.style.display = 'none';
+            closeModal();
+            resetGameState();
+            isGameOver = false;
+            beginSelectedRun();
+            return;
+        }
+    }
+
     if (audioCtx && audioCtx.state === 'suspended' && player.matrix && !isGameOver) {
         audioCtx.resume();
         startBGM();
@@ -2366,6 +2422,7 @@ const exposed = {
     opponentPlayActive, scenarioUpgradeEffects,
     themeMelody, themeMelodyName,
     isBgmRunning: isBGMRunning,
+    particles, updateScore, showClearReward, sounds,
     PIECE_TYPES, SPRINT_TARGET_LINES, MARATHON_TARGET_LEVEL, MARATHON_CLEAR_BONUS,
     VERSUS_WIDTH, VERSUS_HEIGHT, MAX_PENDING_GARBAGE,
     SOFT_DROP_POINT, HARD_DROP_POINT,
@@ -2408,6 +2465,7 @@ const liveState = {
 
 const testMode = new URLSearchParams(location.search).has('test');
 if (testMode) {
+    window.exposed = exposed;
     for (const [name, value] of Object.entries(exposed)) {
         window[name] = value;
     }

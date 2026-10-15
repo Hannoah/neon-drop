@@ -132,6 +132,11 @@ export function createRenderer({
 
         drawClearFlashes(arena, flashingLines, context, logicalW);
 
+        const {particles} = getState();
+        if (particles && typeof particles.draw === 'function') {
+            particles.draw(context);
+        }
+
         context.restore();
     }
 
@@ -144,7 +149,8 @@ export function createRenderer({
         }
         ghostPos.y--;
 
-        context.globalAlpha = 0.45;
+        const pulse = 0.40 + Math.sin(Date.now() / 220) * 0.12;
+        context.globalAlpha = Math.max(0.18, Math.min(0.65, pulse));
         drawMatrix(player.matrix, ghostPos, context, { ghost: true });
         context.globalAlpha = 1.0;
     }

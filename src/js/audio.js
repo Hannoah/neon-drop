@@ -54,8 +54,8 @@ export function createAudioSystem(bgmToggle, sfxToggle) {
         drop: () => sfxToggle.checked && playSound(130, 'triangle', 0.06, 0.06),
         hardDrop: () => {
             if (!sfxToggle.checked) return;
-            playSound(90, 'square', 0.07, 0.08);
-            setTimeout(() => playSound(160, 'triangle', 0.08, 0.06), 40);
+            playSound(75, 'square', 0.07, 0.09);
+            setTimeout(() => playSound(150, 'triangle', 0.08, 0.07), 35);
         },
         clear: (rows = 1) => {
             if (!sfxToggle.checked) return;
@@ -65,7 +65,7 @@ export function createAudioSystem(bgmToggle, sfxToggle) {
             setTimeout(() => playSound(base + 180, 'square', 0.08 + n * 0.02, 0.07), 90);
             if (n >= 3) setTimeout(() => playSound(base + 320, 'triangle', 0.12, 0.06), 180);
         },
-        fanfare: (kind = 'clear') => {
+        fanfare: (kind = 'clear', extra = {}) => {
             if (!sfxToggle.checked || kind === 'none' || kind === 'clear') return;
             if (kind === 'perfect') {
                 playSound(523.25, 'triangle', 0.12, 0.09);
@@ -85,8 +85,11 @@ export function createAudioSystem(bgmToggle, sfxToggle) {
                 return;
             }
             if (kind === 'combo') {
-                playSound(587.33, 'square', 0.08, 0.07);
-                setTimeout(() => playSound(880, 'triangle', 0.1, 0.06), 60);
+                const count = typeof extra === 'number' ? extra : (extra?.combo ?? 1);
+                const scale = [440, 493.88, 554.37, 659.25, 739.99, 880, 987.77, 1108.73, 1318.51];
+                const baseFreq = scale[Math.min(scale.length - 1, Math.max(0, count - 1))];
+                playSound(baseFreq, 'square', 0.08, 0.07);
+                setTimeout(() => playSound(baseFreq * 1.5, 'triangle', 0.1, 0.06), 60);
             }
         },
         unlock: () => {
@@ -105,6 +108,17 @@ export function createAudioSystem(bgmToggle, sfxToggle) {
                 playSound(300, 'sawtooth', 0.3);
                 setTimeout(() => playSound(200, 'sawtooth', 0.5), 300);
             }
+        },
+        levelUp: () => {
+            if (!sfxToggle.checked) return;
+            playSound(440, 'triangle', 0.08, 0.08);
+            setTimeout(() => playSound(554.37, 'triangle', 0.08, 0.08), 80);
+            setTimeout(() => playSound(659.25, 'triangle', 0.14, 0.07), 160);
+        },
+        restart: () => {
+            if (!sfxToggle.checked) return;
+            playSound(440, 'triangle', 0.06, 0.08);
+            setTimeout(() => playSound(880, 'triangle', 0.08, 0.07), 50);
         }
     };
 
