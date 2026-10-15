@@ -15,8 +15,8 @@
     --hud-panel: var(--panel);
     --hud-border: var(--border);
     --hud-muted: var(--muted);
-    --font-display: "Orbitron", "Black Han Sans", "Syne", "Pretendard", -apple-system, BlinkMacSystemFont, sans-serif;
-    --font-ui: "Pretendard", "Chakra Petch", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-display: "Orbitron", "Pretendard", "Noto Sans KR", "Syne", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-ui: "Pretendard", "Noto Sans KR", "Chakra Petch", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     --font-tech: "Orbitron", "Chakra Petch", "Pretendard", monospace;
     --radius: 0;
 }
@@ -44,6 +44,22 @@ body {
     font-family: var(--font-ui);
     font-weight: 400;
     -webkit-font-smoothing: antialiased;
+}
+
+:lang(ko), [lang="ko"], body.lang-ko {
+    font-family: var(--font-ui);
+    letter-spacing: -0.02em;
+    word-break: keep-all;
+}
+
+:lang(ko) .brand-lockup strong,
+:lang(ko) .start-brand,
+:lang(ko) .modal h2,
+:lang(ko) #start-screen #start-game-btn,
+:lang(ko) .run-grade,
+:lang(ko) .mode-card strong,
+:lang(ko) button {
+    letter-spacing: -0.01em;
 }
 
 body:has(#modal-overlay.menu-enter) {
@@ -488,18 +504,20 @@ canvas {
 
 #hold, #next {
     width: 100%;
-    border-color: var(--border);
-    background: #0f0f0f;
+    border: 1px solid #282830;
+    background: #0c0c0e;
+    box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.8);
 }
 
 .stats-panel #score {
-    color: var(--text);
+    color: #ffffff;
     font-family: var(--font-display);
     font-size: clamp(2.1rem, 3.6vw, 3.1rem);
-    font-weight: 800;
-    letter-spacing: -0.03em;
+    font-weight: 900;
+    letter-spacing: -0.01em;
     line-height: 0.95;
     font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 14px rgba(255, 255, 255, 0.35), 0 0 28px rgba(255, 106, 61, 0.25);
 }
 
 .level-row {
@@ -662,40 +680,43 @@ canvas {
     inset: 0;
     width: 100%;
     height: 100%;
-    background: rgba(10, 10, 10, 0.88);
-    backdrop-filter: blur(2px);
+    background: rgba(8, 8, 10, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     justify-content: center;
     align-items: center;
     z-index: 100;
 }
 
 #modal-overlay.menu-enter #start-screen {
-    animation: menuEnter 220ms ease-out;
+    animation: menuEnter 240ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes menuEnter {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .modal {
-    background: var(--panel);
-    padding: 28px 26px;
+    background: rgba(22, 22, 26, 0.96);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 26px 24px;
     border-radius: var(--radius);
-    border: 1px solid var(--border);
+    border: 1px solid #33333c;
     text-align: center;
-    box-shadow: none;
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.75), 0 0 1px rgba(255, 255, 255, 0.15);
     min-width: 300px;
-    animation: modalAppear 0.2s ease-out;
+    animation: modalAppear 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes modalAppear {
-    from { transform: scale(0.98); opacity: 0; }
-    to { transform: scale(1); opacity: 1; }
+    from { transform: scale(0.97) translateY(4px); opacity: 0; }
+    to { transform: scale(1) translateY(0); opacity: 1; }
 }
 
 .modal h2 {
-    margin: 0 0 8px;
+    margin: 0 0 12px;
     color: var(--text);
     font-family: var(--font-display);
     font-weight: 800;
@@ -703,32 +724,37 @@ canvas {
 }
 
 .modal input[type="text"], .modal select {
-    padding: 10px;
-    font-size: 16px;
+    padding: 10px 14px;
+    font-size: 15px;
     border-radius: var(--radius);
     border: 1px solid var(--border);
-    background: var(--bg);
+    background: #0e0e12;
     color: var(--text);
     margin: 12px 0;
     min-width: 180px;
     text-align: center;
+    transition: border-color 140ms ease;
+}
+.modal input[type="text"]:focus, .modal select:focus {
+    border-color: var(--accent);
 }
 
 .modal button {
-    background: transparent;
+    background: rgba(255, 255, 255, 0.03);
     color: var(--text);
-    border: 1px solid var(--border);
+    border: 1px solid #33333c;
     padding: 10px 18px;
     font-weight: 600;
     border-radius: var(--radius);
     cursor: pointer;
-    font-size: 15px;
+    font-size: 14px;
+    transition: all 140ms ease;
 }
 
 .modal button:hover {
-    border-color: #444;
-    color: var(--text);
-    background: #222;
+    border-color: #555562;
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .modal button:disabled { cursor: not-allowed; opacity: 0.45; }
@@ -738,10 +764,11 @@ canvas {
     width: min(calc(100% - 32px), 480px);
     max-height: calc(100dvh - 24px);
     overflow: hidden;
-    padding: 20px 22px 16px;
-    background: var(--panel);
-    border: 1px solid var(--border);
+    padding: 16px 20px 14px;
+    background: rgba(20, 20, 24, 0.97);
+    border: 1px solid #34343d;
     border-left: 4px solid var(--accent);
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.8), 0 0 20px rgba(255, 106, 61, 0.12);
 }
 
 #start-screen.start-hero {
@@ -755,16 +782,20 @@ canvas {
 .start-brand {
     margin: 0;
     font-family: var(--font-display);
-    font-size: clamp(1.7rem, 4.2vw, 2.3rem);
-    font-weight: 800;
-    letter-spacing: 0.04em;
+    font-size: clamp(1.7rem, 4.2vw, 2.2rem);
+    font-weight: 900;
+    letter-spacing: 0.06em;
     color: var(--text);
-    line-height: 0.95;
+    background: linear-gradient(135deg, #ffffff 40%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 2px 14px rgba(255, 106, 61, 0.45));
+    line-height: 1;
     text-transform: uppercase;
 }
 
 .start-tagline {
-    margin: 6px 0 12px;
+    margin: 4px 0 10px;
     color: var(--muted);
     font-size: 13px;
     font-weight: 500;
@@ -774,7 +805,7 @@ canvas {
 .start-menu-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
     width: 100%;
     text-align: left;
 }
@@ -782,7 +813,7 @@ canvas {
 .menu-section {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
     width: 100%;
 }
 
@@ -796,7 +827,7 @@ canvas {
 }
 
 .menu-section--quiet {
-    padding-top: 8px;
+    padding-top: 6px;
     border-top: 1px solid var(--border);
 }
 
@@ -807,24 +838,36 @@ canvas {
     width: 100%;
     min-height: 44px;
     margin: 0;
-    border: 1px solid var(--text);
-    background: var(--text);
-    color: var(--bg);
+    padding: 10px 14px;
+    border: 1px solid var(--accent);
+    background: linear-gradient(135deg, #ff7a4d 0%, var(--accent) 100%);
+    color: #0c0c0e;
     font-family: var(--font-display);
     font-size: 16px;
-    font-weight: 800;
-    letter-spacing: 0.12em;
+    font-weight: 900;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     text-align: left;
+    box-shadow: 0 4px 16px rgba(255, 106, 61, 0.35);
+    transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+    cursor: pointer;
 }
 #start-screen #start-game-btn small {
     font-family: var(--font-ui);
     font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    color: color-mix(in srgb, var(--bg) 55%, transparent);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: rgba(12, 12, 14, 0.72);
 }
-#start-screen #start-game-btn:hover small { color: #111; }
+#start-screen #start-game-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px rgba(255, 106, 61, 0.6);
+    filter: brightness(1.08);
+}
+#start-screen #start-game-btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 8px rgba(255, 106, 61, 0.3);
+}
 
 #first-run-nudge {
     display: flex;
@@ -833,31 +876,25 @@ canvas {
     justify-content: space-between;
     gap: 6px;
     margin: 0;
-    padding: 6px 10px;
+    padding: 4px 8px;
     border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
     background: color-mix(in srgb, var(--accent) 10%, transparent);
     color: var(--text);
-    font-size: 12px;
+    font-size: 11px;
 }
 #first-run-nudge[hidden] { display: none; }
 #first-run-nudge button {
     width: auto !important;
-    min-height: 36px !important;
+    min-height: 32px !important;
     margin: 0 !important;
-    padding: 6px 12px !important;
+    padding: 4px 10px !important;
     border: 1px solid var(--accent) !important;
     background: var(--accent) !important;
     color: #111 !important;
-    font-size: 12px !important;
+    font-size: 11px !important;
     font-weight: 700 !important;
     letter-spacing: 0.08em !important;
     text-transform: uppercase;
-}
-
-#start-screen #start-game-btn:hover {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #111;
 }
 
 .start-menu-list .menu-section > button,
@@ -865,16 +902,22 @@ canvas {
     width: 100%;
     margin: 0;
     min-height: 36px;
-    padding: 7px 10px;
+    padding: 6px 10px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    background: transparent;
+    background: rgba(255, 255, 255, 0.02);
     color: var(--text);
     font-size: 13px;
     font-weight: 600;
     text-align: left;
     letter-spacing: 0.02em;
     transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.start-menu-list .menu-section > button:hover,
+.start-menu-list .mode-options > button:hover {
+    border-color: #555564;
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .start-menu-list .menu-section > button:focus-visible,
@@ -900,6 +943,12 @@ canvas {
     flex-direction: column;
     align-items: flex-start;
     gap: 1px;
+    padding: 6px 10px;
+    cursor: pointer;
+}
+.modal .mode-card strong {
+    font-size: 13px;
+    font-weight: 700;
 }
 .modal .mode-card span {
     display: block;
@@ -916,15 +965,18 @@ canvas {
 
 .modal .mode-card[aria-pressed="true"] {
     border-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
-    box-shadow: inset 3px 0 0 var(--accent);
+    background: color-mix(in srgb, var(--accent) 15%, #16161a);
+    box-shadow: inset 3px 0 0 var(--accent), 0 0 12px rgba(255, 106, 61, 0.18);
     color: var(--text);
+}
+.modal .mode-card[aria-pressed="true"] strong {
+    color: var(--accent);
 }
 
 .modal .mode-card[aria-pressed="true"]:hover {
     border-color: var(--accent);
     color: var(--text);
-    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    background: color-mix(in srgb, var(--accent) 22%, #16161a);
 }
 
 #scenario-continue-btn {
@@ -1227,9 +1279,16 @@ canvas {
 #scenario-result-stars { min-height: 1em; color: var(--danger); }
 
 .btn-exit {
-    background: transparent;
-    color: var(--muted);
-    border: 1px solid var(--border);
+    background: rgba(255, 77, 109, 0.06);
+    color: #ff6b84;
+    border: 1px solid rgba(255, 77, 109, 0.4);
+    transition: all 140ms ease;
+}
+.btn-exit:hover {
+    background: rgba(255, 77, 109, 0.22);
+    color: #ffffff;
+    border-color: #ff4d6d;
+    box-shadow: 0 0 14px rgba(255, 77, 109, 0.35);
 }
 
 #game-over-screen,
