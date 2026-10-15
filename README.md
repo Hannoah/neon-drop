@@ -60,12 +60,15 @@ Guideline 프리셋은 회전에 `Z`/`X`(및 `↑` CW)를 쓰고 180은 역시 `
 
 시작 메뉴와 일시정지 화면의 **Settings**에서 다음을 바꿀 수 있습니다.
 
+- 한국어 / English UI 언어 (설정 즉시 적용, 다음 실행에도 유지)
 - Classic / Guideline 컨트롤 프리셋
 - 키 리바인드 (액션별 키 캡처; 충돌 시 기존 바인딩과 교체)
 - DAS (50–400ms), ARR (0–100ms), Lock delay (100–1000ms)
 - BGM / SFX 토글 (헤더 Sound 메뉴 대신 Settings에 통합)
 
 값은 `neonDropPreferences`(version 2)에 저장되며 새로고침 후에도 유지됩니다. Settings는 포커스 트랩이 적용되고 `Esc`로 닫힙니다.
+
+첫 실행은 브라우저의 언어 우선순위에서 한국어 또는 영어를 선택하며, 두 언어가 없으면 영어로 표시합니다. 저장한 언어 선택이 브라우저 설정보다 우선합니다. 메뉴, 게임 상태, 캠페인, 결과, 해금 알림과 접근성 안내를 번역하며, 고유 이름과 SRS/DAS/ARR/20G 표기는 유지합니다. 언어를 바꿔도 진행 중인 게임과 저장된 닉네임·기록은 유지됩니다.
 
 ## Next 5 · 점수
 
@@ -96,6 +99,8 @@ src/js/
 ├── lock.js          # 락 딜레이 상태
 ├── input.js         # DAS/ARR·소프트 드롭 홀드
 ├── settings.js      # 설정 v2 정규화·프리셋·리바인드
+├── i18n.js          # 한국어 사전·언어 선택·문구 치환
+├── ui.js            # DOM 번역·캠페인 설명·이벤트 표시
 ├── scoring.js       # T-Spin/PC·드롭·Garbage·B2B
 ├── ai.js            # AI 상대 휴리스틱
 ├── audio.js         # Web Audio BGM/SFX

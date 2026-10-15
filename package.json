@@ -5,7 +5,7 @@
   "scripts": {
     "start": "python3 -m http.server 8000",
     "test": "npm run test:unit && node test-tetris.cjs",
-    "test:unit": "node --test test/unit/ai.test.mjs test/unit/audio.test.mjs test/unit/board.test.mjs test/unit/gravity.test.mjs test/unit/input.test.mjs test/unit/juice.test.mjs test/unit/leaderboard.test.mjs test/unit/lock.test.mjs test/unit/meta.test.mjs test/unit/package.test.mjs test/unit/queue.test.mjs test/unit/renderer.test.mjs test/unit/scenario.test.mjs test/unit/scoring.test.mjs test/unit/settings.test.mjs test/unit/srs.test.mjs"
+    "test:unit": "node --test test/unit/i18n.test.mjs test/unit/ai.test.mjs test/unit/audio.test.mjs test/unit/board.test.mjs test/unit/gravity.test.mjs test/unit/input.test.mjs test/unit/juice.test.mjs test/unit/leaderboard.test.mjs test/unit/lock.test.mjs test/unit/meta.test.mjs test/unit/package.test.mjs test/unit/queue.test.mjs test/unit/renderer.test.mjs test/unit/scenario.test.mjs test/unit/scoring.test.mjs test/unit/settings.test.mjs test/unit/srs.test.mjs"
   },
   "dependencies": {},
   "devDependencies": {

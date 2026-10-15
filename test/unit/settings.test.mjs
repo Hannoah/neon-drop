@@ -10,6 +10,33 @@ import {
 } from '../../src/js/settings.js';
 import { readLeaderboard, LEADERBOARD_GENERATION } from '../../src/js/leaderboard.js';
 
+test('language preference survives normalization and control preset changes', () => {
+    const korean = normalizeSettings({version: 2, language: 'ko'});
+    assert.equal(korean.language, 'ko');
+    assert.equal(applyPreset(korean, 'guideline').language, 'ko');
+    assert.equal(normalizeSettings({version: 2, language: 'en'}).language, 'en');
+    assert.ok(['en', 'ko'].includes(normalizeSettings({language: 'unsupported'}).language));
+});
+
+test('missing or invalid timing values use finite defaults while ARR zero is preserved', () => {
+    for (const timing of [undefined, {}, {das: 'bad', arr: 'bad', lockDelay: 'bad'},
+        {das: Infinity, arr: Infinity, lockDelay: Infinity}]) {
+        assert.deepEqual(normalizeSettings({version: 2, timing}).timing, DEFAULT_SETTINGS.timing);
+    }
+    assert.equal(normalizeSettings({version: 2, timing: {arr: 0}}).timing.arr, 0);
+});
+
+test('malformed saved bindings fall back per action without losing valid settings', () => {
+    const s = normalizeSettings({version: 2, bgm: false, bindings: {
+        moveLeft: 123, moveRight: 'KeyD', hold: ['KeyH', null, 42, ''], rotateCCW: [],
+    }});
+    assert.deepEqual(s.bindings.moveLeft, CLASSIC_BINDINGS.moveLeft);
+    assert.deepEqual(s.bindings.moveRight, CLASSIC_BINDINGS.moveRight);
+    assert.deepEqual(s.bindings.hold, ['KeyH']);
+    assert.deepEqual(s.bindings.rotateCCW, []);
+    assert.equal(s.bgm, false);
+});
+
 test('normalizeSettings migrates v1 preferences', () => {
     const s = normalizeSettings({mode: 'sprint', bgm: false, sfx: true});
     assert.equal(s.version, 2);

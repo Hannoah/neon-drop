@@ -15,8 +15,8 @@
     --hud-panel: var(--panel);
     --hud-border: var(--border);
     --hud-muted: var(--muted);
-    --font-display: "Syne", sans-serif;
-    --font-ui: "IBM Plex Sans", sans-serif;
+    --font-display: "Syne", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    --font-ui: "IBM Plex Sans", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
     --radius: 0;
 }
 
@@ -485,7 +485,7 @@ canvas {
     text-transform: uppercase;
 }
 .status-row:last-child { border-bottom: 0; }
-.status-row span {
+.status-row > span[id] {
     color: var(--text);
     font-size: 13px;
     font-weight: 600;
@@ -495,7 +495,7 @@ canvas {
 }
 #event-message { color: var(--accent) !important; font-size: 12px !important; }
 #event-message.is-big { font-size: 13px !important; color: var(--text) !important; }
-.status-row.is-hot span { color: var(--accent); }
+.status-row.is-hot > span[id] { color: var(--accent); }
 #flow-row { flex-wrap: wrap; }
 #flow-row .flow-meter {
     flex: 1 1 100%;
@@ -622,7 +622,7 @@ canvas {
     letter-spacing: 0.04em;
 }
 
-.modal input, .modal select {
+.modal input[type="text"], .modal select {
     padding: 10px;
     font-size: 16px;
     border-radius: var(--radius);
@@ -972,6 +972,7 @@ canvas {
 #settings-screen h2 { text-align: center; }
 
 #settings-screen fieldset {
+    min-width: 0;
     margin: 0 0 14px;
     padding: 12px;
     border: 1px solid var(--border);
@@ -1381,3 +1382,9 @@ canvas {
     .garbage-meter span,
     .flow-meter span { transition: none; }
 }
+
+html:lang(ko) { word-break: keep-all; overflow-wrap: break-word; }
+.settings-language { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.settings-language select { min-width: 130px; }
+.modal .mode-card strong { font-weight: inherit; }
+html:lang(ko) .modal #scenario-stage-list button[aria-current="step"]::after { content: "현재" / ""; }

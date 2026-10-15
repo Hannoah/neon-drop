@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import {setLanguage} from '../../src/js/i18n.js';
 import {
     unlockLabel,
     formatUnlocks,
@@ -81,4 +82,17 @@ test('formatRunGrade shouts grade, PB, and unlocks', () => {
         formatRunGrade({grade: 'S', stars: 3, isPb: true, unlocks: ['frame:gold']}),
         'Grade S · ★★★ · NEW PB · UNLOCKED Gold Frame',
     );
+});
+
+test('Korean run copy translates time, grade, unlocks and controls', () => {
+    setLanguage('ko');
+    try {
+        assert.equal(formatHoursLeft(3600000), '1시간 남음');
+        assert.equal(dailyCardDetail({dateKey: '20261015', streak: 2, msLeft: 3600000}), '2일 연속 · 1시간 남음');
+        assert.equal(formatRunGrade({grade: 'S', isPb: true, unlocks: ['frame:gold']}),
+            '등급 S · 최고 기록 갱신 · 해금 골드 테두리');
+        assert.equal(controlLegendRows()[0].label, '이동');
+    } finally {
+        setLanguage('en');
+    }
 });

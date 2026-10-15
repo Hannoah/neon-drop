@@ -1,3 +1,5 @@
+import {t, setLanguage, getLanguage} from './src/js/i18n.js';
+import {applyTranslations, setText, scenarioCopy, translateEvent} from './src/js/ui.js';
 import {
     PIECE_TYPES,
     SPRINT_TARGET_LINES,
@@ -161,6 +163,7 @@ const resumeGameBtn = document.getElementById('resume-game-btn');
 const pauseSettingsBtn = document.getElementById('pause-settings-btn');
 const quitToMenuBtn = document.getElementById('quit-to-menu-btn');
 const settingsScreen = document.getElementById('settings-screen');
+const settingsLanguage = document.getElementById('settings-language');
 const menuSettingsBtn = document.getElementById('menu-settings-btn');
 const settingsBackBtn = document.getElementById('settings-back-btn');
 const settingsResetBtn = document.getElementById('settings-reset-btn');
@@ -337,7 +340,7 @@ function selectGameMode(mode) {
     modeCards.forEach(card => {
         card.setAttribute('aria-pressed', String(card.dataset.mode === mode));
     });
-    if (playModeHint) playModeHint.textContent = MODE_LABELS[mode] || 'Marathon';
+    if (playModeHint) playModeHint.textContent = t(MODE_LABELS[mode] || 'Marathon');
     updateLeaderboard();
 }
 
@@ -354,9 +357,9 @@ function refreshPbSummary() {
     const key = dateKeyUTC();
     const daily = meta.pb.daily?.dateKey === key ? meta.pb.daily : null;
     pbSummary.textContent = [
-        `Sprint PB ${formatPbTime(meta.pb.sprintMs)}${meta.pb.sprintGrade ? ` ${meta.pb.sprintGrade}` : ''}`,
-        `Marathon PB ${formatPbTime(meta.pb.marathonMs)}${meta.pb.marathonGrade ? ` ${meta.pb.marathonGrade}` : ''}`,
-        `Daily ${key}${meta.stats.dailyStreak ? ` STREAK ${meta.stats.dailyStreak}` : ''} ${daily ? `${formatPbTime(daily.ms)} ${daily.grade || ''}`.trim() : '—'}`,
+        t('Sprint PB {time}{grade}', {time: formatPbTime(meta.pb.sprintMs), grade: meta.pb.sprintGrade ? ` ${meta.pb.sprintGrade}` : ''}),
+        t('Marathon PB {time}{grade}', {time: formatPbTime(meta.pb.marathonMs), grade: meta.pb.marathonGrade ? ` ${meta.pb.marathonGrade}` : ''}),
+        t('Daily {date}{streak} {record}', {date: key, streak: meta.stats.dailyStreak ? t(' STREAK {count}', {count: meta.stats.dailyStreak}) : '', record: daily ? `${formatPbTime(daily.ms)} ${daily.grade || ''}`.trim() : '—'}),
     ].join(' · ');
 
     const dailyCard = document.querySelector('[data-mode-card="daily"] span');
@@ -382,12 +385,12 @@ function renderCosmeticPickers() {
     const frameHtml = meta.unlocks.frames.map(id => {
         const item = FRAME_UNLOCKS[id];
         const checked = meta.unlocks.selectedFrame === id ? 'checked' : '';
-        return `<label><input type="radio" name="cosmetic-frame" value="${id}" ${checked}> ${item.name}</label>`;
+        return `<label><input type="radio" name="cosmetic-frame" value="${id}" ${checked}> ${t(item.name)}</label>`;
     }).join('');
     const clearHtml = meta.unlocks.clears.map(id => {
         const item = CLEAR_UNLOCKS[id];
         const checked = meta.unlocks.selectedClear === id ? 'checked' : '';
-        return `<label><input type="radio" name="cosmetic-clear" value="${id}" ${checked}> ${item.name}</label>`;
+        return `<label><input type="radio" name="cosmetic-clear" value="${id}" ${checked}> ${t(item.name)}</label>`;
     }).join('');
     cosmeticFrames.innerHTML = frameHtml || '<span style="color:var(--muted)">Ink</span>';
     cosmeticClears.innerHTML = clearHtml || '<span style="color:var(--muted)">Mint</span>';
@@ -423,10 +426,10 @@ function configureRunSeedAndQueue() {
 }
 
 function tutorialObjectiveText() {
-    if (tutorialStep <= 0) return 'TUTORIAL · Clear 1 line';
-    if (tutorialStep === 1) return 'TUTORIAL · Clear a Double+';
-    if (tutorialStep === 2) return 'TUTORIAL · Use Hold (C)';
-    return 'TUTORIAL · Done';
+    if (tutorialStep <= 0) return t('TUTORIAL · Clear 1 line');
+    if (tutorialStep === 1) return t('TUTORIAL · Clear a Double+');
+    if (tutorialStep === 2) return t('TUTORIAL · Use Hold ({key})', {key: bindingLabel(settings.bindings.hold)});
+    return t('TUTORIAL · Done');
 }
 
 function readPreferences() {
@@ -453,6 +456,7 @@ function writePreferences() {
 
 function applyLiveSettings(next = settings) {
     settings = normalizeSettings(next);
+    setLanguage(settings.language);
     inputController.setTiming(settings.timing);
     player.lockDelay = settings.timing.lockDelay;
     if (lockState.active) {
@@ -559,6 +563,7 @@ function cancelRebind() {
 }
 
 function syncSettingsUI() {
+    settingsLanguage.value = settings.language;
     presetClassicRadio.checked = settings.preset === 'classic';
     presetGuidelineRadio.checked = settings.preset === 'guideline';
     settingsDas.value = String(settings.timing.das);
@@ -572,7 +577,7 @@ function syncSettingsUI() {
         const capturing = rebindingAction === action;
         button.setAttribute('aria-pressed', String(capturing));
         button.textContent = capturing
-            ? 'Press a key…'
+            ? t('Press a key…')
             : bindingLabel(settings.bindings[action] ?? []);
     });
 }
@@ -605,26 +610,6 @@ function closeSettings() {
     openModal('start-screen-title', menuSettingsBtn);
 }
 
-const scenarioCopy = {
-    1: stage => ({objective: `Clear ${stage.lineGoal} lines.`, modifier: 'Standard drop speed.'}),
-    2: stage => ({
-        objective: `Clear ${stage.lineGoal} lines before time expires.`,
-        modifier: `Faster drop speed · ${formatElapsedTime(stage.timeLimitMs)} limit.`,
-    }),
-    3: stage => ({
-        objective: `Clear ${stage.lineGoal} lines.`,
-        modifier: `Interference every ${stage.hazardIntervalMs / 1000} seconds.`,
-    }),
-    4: stage => ({
-        objective: `Defeat ${stage.rival}.`,
-        modifier: `${stage.opponentTurns === 1 ? 'One' : stage.opponentTurns} opponent turn${stage.opponentTurns === 1 ? '' : 's'} per lock.`,
-    }),
-    5: stage => ({
-        objective: `Defeat ${stage.rival}.`,
-        modifier: `${stage.opponentTurns} opponent turns per lock · interference every ${stage.hazardIntervalMs / 1000} seconds.`,
-    }),
-};
-
 function hideModalScreens() {
     startScreen.style.display = 'none';
     pauseScreen.style.display = 'none';
@@ -653,11 +638,11 @@ function renderScenarioMap() {
         button.dataset.scenarioStage = stage.id;
         button.disabled = !unlocked;
         button.textContent = unlocked
-            ? `STAGE ${String(stage.id).padStart(2, '0')}\n${stage.name}\n${stage.rival}\n${starsLabel}`
-            : `STAGE ${String(stage.id).padStart(2, '0')}\nLOCKED`;
+            ? t('STAGE {stage}\n{name}\n{rival}\n{stars}', {stage: String(stage.id).padStart(2, '0'), name: t(stage.name), rival: stage.rival, stars: starsLabel})
+            : t('STAGE {stage}\nLOCKED', {stage: String(stage.id).padStart(2, '0')});
         button.setAttribute('aria-label', unlocked
-            ? `Stage ${String(stage.id).padStart(2, '0')}, ${stage.name}, rival ${stage.rival}, ${stars} of 3 stars`
-            : `Stage ${String(stage.id).padStart(2, '0')}, ${stage.name}, locked`);
+            ? t('Stage {stage}, {name}, rival {rival}, {stars} of 3 stars', {stage: String(stage.id).padStart(2, '0'), name: t(stage.name), rival: stage.rival, stars})
+            : t('Stage {stage}, {name}, locked', {stage: String(stage.id).padStart(2, '0'), name: t(stage.name)}));
         if (stage.id === selectedScenarioStageId) button.setAttribute('aria-current', 'step');
         button.addEventListener('click', () => {
             if (!canPlayScenarioStage(scenarioProgress, stage.id)) return;
@@ -670,13 +655,13 @@ function renderScenarioMap() {
     scenarioStageList.replaceChildren(...buttons);
 
     const stage = SCENARIO_STAGES.find(candidate => candidate.id === selectedScenarioStageId);
-    const copy = scenarioCopy[stage.id](stage);
+    const copy = scenarioCopy(stage);
     const result = scenarioProgress.results[stage.id];
-    scenarioStageRival.textContent = `RIVAL · ${stage.rival}`;
-    scenarioStageName.textContent = `STAGE ${String(stage.id).padStart(2, '0')} · ${stage.name}`;
+    scenarioStageRival.textContent = t('RIVAL · {rival}', {rival: stage.rival});
+    scenarioStageName.textContent = t('STAGE {stage} · {name}', {stage: String(stage.id).padStart(2, '0'), name: t(stage.name)});
     scenarioStageObjective.textContent = copy.objective;
     scenarioStageModifier.textContent = copy.modifier;
-    scenarioStageBest.textContent = `BEST ${result ? formatElapsedTime(result.bestTimeMs) : '--:--'}`;
+    scenarioStageBest.textContent = t('BEST {time}', {time: result ? formatElapsedTime(result.bestTimeMs) : '--:--'});
     scenarioPlayBtn.disabled = !canPlayScenarioStage(scenarioProgress, stage.id);
 }
 
@@ -694,9 +679,9 @@ function showScenarioBriefing() {
     if (!canPlayScenarioStage(scenarioProgress, selectedScenarioStageId)) return false;
     const stage = SCENARIO_STAGES.find(candidate => candidate.id === selectedScenarioStageId);
     if (!stage) return false;
-    const copy = scenarioCopy[stage.id](stage);
+    const copy = scenarioCopy(stage);
     scenarioBriefingRival.textContent = stage.rival;
-    scenarioBriefingName.textContent = stage.name;
+    scenarioBriefingName.textContent = t(stage.name);
     scenarioBriefingObjective.textContent = copy.objective;
     scenarioBriefingModifier.textContent = copy.modifier;
     hideModalScreens();
@@ -873,6 +858,7 @@ function showClearReward(points, rowCount, kind = 'clear') {
         : kind === 'tetris' ? 'TETRIS'
         : kind === 'tspin' ? (lastEventMessage || 'T-SPIN')
         : `+${points}`;
+    clearRewardElement.textContent = translateEvent(clearRewardElement.textContent);
     clearRewardElement.classList.remove('is-on');
     void clearRewardElement.offsetWidth;
     clearRewardElement.classList.add('is-on');
@@ -951,7 +937,7 @@ function scoreLines(rowCount, tSpinOrPivot = 'none', perfectClear = false) {
         : 0;
     const rushBonus = gameMode === 'marathon' && rowCount > 0
         ? marathonComboRushBonus(combo, player.level) : 0;
-    const b2bChainBonus = gameMode === 'marathon' && b2bChain >= 2
+    const b2bChainBonus = gameMode === 'marathon' && rowCount > 0 && b2bChain >= 2
         ? 200 * b2bChain * player.level : 0;
     const multiBonus = rowCount >= 2 ? multiClearBounty(rowCount, player.level) : 0;
     const leveledUp = rowCount > 0 && player.level > prevLevel;
@@ -1219,7 +1205,7 @@ function finishRankedRun(title, {awardClearBonus = false} = {}) {
             runGradeElement.hidden = false;
             runGradeElement.dataset.grade = '';
             runGradeElement.classList.remove('is-pb');
-            runGradeElement.textContent = 'Tutorial complete · Mint frame unlocked';
+            setText(runGradeElement, 'Tutorial complete · Mint frame unlocked');
         }
         showUnlockToast(['frame:mint']);
         showHighScoreModal('Tutorial Complete!');
@@ -1404,7 +1390,7 @@ function update(time = 0) {
     const frameDt = Math.max(0, deltaTime);
 
     inputController.tick(frameDt, action => {
-        if (canAcceptGameInput()) emitHorizontal(action);
+        return canAcceptGameInput() && emitHorizontal(action);
     });
 
     elapsedTime += frameDt;
@@ -1500,13 +1486,13 @@ function updateScore() {
     scoreElement.innerText = String(player.score);
     levelElement.innerText = String(player.level);
     linesElement.innerText = String(player.lines);
-    modeElement.innerText = MODE_LABELS[gameMode] || 'Marathon';
+    modeElement.innerText = t(MODE_LABELS[gameMode] || 'Marathon');
     timerElement.innerText = formatElapsedTime(elapsedTime);
     comboElement.innerText = String(combo);
     comboElement.closest('.status-row')?.classList.toggle('is-hot', combo >= 3);
     backToBackElement.innerText = b2bChain >= 2
         ? `x${b2bChain}`
-        : (backToBackActive ? 'Active' : 'Ready');
+        : t(backToBackActive ? 'Active' : 'Ready');
     backToBackElement.closest('.status-row')?.classList.toggle('is-hot', b2bChain >= 2);
     const showFlow = gameMode === 'marathon';
     if (flowRow) flowRow.hidden = !showFlow;
@@ -1515,7 +1501,7 @@ function updateScore() {
         flowValueElement.innerText = `${flowPct}%`;
         flowMeterFill.style.width = `${flowPct}%`;
     }
-    eventMessageElement.innerText = lastEventMessage || '—';
+    eventMessageElement.innerText = translateEvent(lastEventMessage || '—');
     eventMessageElement.classList.toggle(
         'is-big',
         /TETRIS|PERFECT|T-SPIN|COMBO RUSH|FLOW MAX/.test(lastEventMessage || ''),
@@ -1533,18 +1519,18 @@ function updateScore() {
     scenarioObjective.hidden = !showObjective;
     if (scenarioActive) {
         scenarioObjective.textContent = activeScenarioStage.kind === 'lines'
-            ? `OBJECTIVE ${Math.min(player.lines, activeScenarioStage.lineGoal)} / ${activeScenarioStage.lineGoal}`
-            : 'OBJECTIVE DEFEAT RIVAL';
+            ? t('OBJECTIVE {value} / {goal}', {value: Math.min(player.lines, activeScenarioStage.lineGoal), goal: activeScenarioStage.lineGoal})
+            : t('OBJECTIVE DEFEAT RIVAL');
     } else if (gameMode === 'tutorial') {
         scenarioObjective.textContent = tutorialObjectiveText();
     } else if (marathonActive) {
         const lv = Math.min(player.level, MARATHON_TARGET_LEVEL);
-        scenarioObjective.textContent = `CLEAR LV ${lv} / ${MARATHON_TARGET_LEVEL}`;
+        scenarioObjective.textContent = t('CLEAR LV {level} / {goal}', {level: lv, goal: MARATHON_TARGET_LEVEL});
     } else if (gameMode === 'cheese') {
         const garbageRows = arena.filter(row => row.includes(8)).length;
-        scenarioObjective.textContent = `DIG ${garbageRows} GARBAGE`;
+        scenarioObjective.textContent = t('DIG {rows} GARBAGE', {rows: garbageRows});
     } else if (lineGoal != null) {
-        scenarioObjective.textContent = `CLEAR ${Math.min(player.lines, lineGoal)} / ${lineGoal}`;
+        scenarioObjective.textContent = t('CLEAR {value} / {goal}', {value: Math.min(player.lines, lineGoal), goal: lineGoal});
     }
 
     const paceKey = gameMode === 'daily' ? 'daily' : (gameMode === 'sprint' ? 'sprint' : (gameMode === 'marathon' ? 'marathon' : null));
@@ -1558,8 +1544,8 @@ function updateScore() {
             const unit = gameMode === 'marathon' ? 'LV' : 'L';
             paceGhostElement.hidden = false;
             paceGhostElement.textContent = delta === 0
-                ? `PB PACE · even`
-                : (delta > 0 ? `PB PACE · +${delta}${unit}` : `PB PACE · ${delta}${unit}`);
+                ? t('PB PACE · even')
+                : (delta > 0 ? t('PB PACE · {delta}{unit}', {delta: `+${delta}`, unit: t(unit)}) : t('PB PACE · {delta}{unit}', {delta, unit: t(unit)}));
         }
     }
 }
@@ -1622,7 +1608,7 @@ function completeScenarioStage() {
     };
     if (!writeScenarioProgress(candidate)) {
         showScenarioResult(false, 0, 'SAVE FAILED');
-        scenarioResultDetail.textContent = 'Progress could not be saved. Check browser storage and retry.';
+        scenarioResultDetail.textContent = t('Progress could not be saved. Check browser storage and retry.');
         scenarioResultMapBtn.style.display = 'none';
         return false;
     }
@@ -1646,12 +1632,12 @@ function failScenarioStage(title) {
 
 function showScenarioResult(success, stars = 0, failureTitle = 'SYSTEM OVERLOAD') {
     hideModalScreens();
-    scenarioResultTitle.textContent = success ? 'STAGE CLEAR' : failureTitle;
+    setText(scenarioResultTitle, success ? 'STAGE CLEAR' : failureTitle);
     scenarioResultStars.textContent = success ? '★'.repeat(stars) : '';
-    scenarioResultStars.setAttribute('aria-label', `${success ? stars : 0} of 3 stars`);
+    scenarioResultStars.setAttribute('aria-label', t('{stars} of 3 stars', {stars: success ? stars : 0}));
     scenarioResultDetail.textContent = success
-        ? `${activeScenarioStage.name} · TIME ${formatElapsedTime(elapsedTime)}`
-        : 'Retry Stage';
+        ? t('{name} · TIME {time}', {name: t(activeScenarioStage.name), time: formatElapsedTime(elapsedTime)})
+        : t('Retry Stage');
     scenarioRewardOpenBtn.style.display = success && scenarioProgress.pendingRewardStage !== null ? '' : 'none';
     scenarioResultMapBtn.style.display = '';
     scenarioResultScreen.style.display = 'block';
@@ -1668,7 +1654,7 @@ function showScenarioReward() {
         button.dataset.scenarioUpgrade = upgrade.id;
         button.dataset.stack = stack;
         button.disabled = stack >= 4;
-        button.textContent = `${upgrade.name}\n${upgrade.description}\n${button.disabled ? 'MAX' : `CURRENT ${stack} / 4`}`;
+        button.textContent = `${t(upgrade.name)}\n${t(upgrade.description)}\n${button.disabled ? t('MAX') : t('CURRENT {stack} / 4', {stack})}`;
         button.addEventListener('click', () => chooseScenarioUpgrade(upgrade.id));
         return button;
     });
@@ -1691,7 +1677,7 @@ function chooseScenarioUpgrade(id) {
         pendingRewardStage: null,
     };
     if (!writeScenarioProgress(candidate)) {
-        scenarioRewardError.textContent = 'Progress could not be saved. Try again.';
+        scenarioRewardError.textContent = t('Progress could not be saved. Try again.');
         return false;
     }
     scenarioProgress = candidate;
@@ -1747,12 +1733,7 @@ function showStartScreen() {
     hideModalScreens();
     startScreen.style.display = 'block';
     modalOverlay.classList.add('menu-enter');
-    const unlockedStage = SCENARIO_STAGES[scenarioProgress.unlockedStage - 1];
-    scenarioContinueDetail.textContent = scenarioProgress.pendingRewardStage !== null
-        ? `UPGRADE READY · STAGE ${String(scenarioProgress.pendingRewardStage).padStart(2, '0')}`
-        : scenarioProgress.completed
-        ? 'CHAMPION · 5/5 STAGES'
-        : `STAGE ${String(unlockedStage.id).padStart(2, '0')} · ${unlockedStage.rival}`;
+    refreshCampaignSummary();
     selectGameMode(gameModeSelect.value);
     refreshPbSummary();
     refreshFirstRunNudge();
@@ -1761,8 +1742,17 @@ function showStartScreen() {
     openModal('start-screen-title', startGameBtn);
 }
 
+function refreshCampaignSummary() {
+    const unlockedStage = SCENARIO_STAGES[scenarioProgress.unlockedStage - 1];
+    scenarioContinueDetail.textContent = scenarioProgress.pendingRewardStage !== null
+        ? t('UPGRADE READY · STAGE {stage}', {stage: String(scenarioProgress.pendingRewardStage).padStart(2, '0')})
+        : scenarioProgress.completed
+        ? t('CHAMPION · 5/5 STAGES')
+        : t('STAGE {stage} · {rival}', {stage: String(unlockedStage.id).padStart(2, '0'), rival: unlockedStage.rival});
+}
+
 function exitApplication() {
-    if (!window.confirm('Neon Drop을 종료하시겠습니까?')) return;
+    if (!window.confirm(t('Exit Neon Drop?'))) return;
     cancelScheduledUpdate();
     stopBGM();
     isGameOver = true;
@@ -1796,7 +1786,7 @@ let unlockToastTimer = 0;
 function showUnlockToast(unlocks) {
     if (!unlockToast || !unlocks?.length) return;
     unlockToast.hidden = false;
-    unlockToast.textContent = `UNLOCKED · ${formatUnlocks(unlocks)}`;
+    unlockToast.textContent = t('UNLOCKED · {names}', {names: formatUnlocks(unlocks)});
     unlockToast.classList.remove('is-on');
     void unlockToast.offsetWidth;
     unlockToast.classList.add('is-on');
@@ -1832,7 +1822,7 @@ function showHighScoreModal(title = 'Game Over') {
     pauseScreen.style.display = 'none';
     leaderboardScreen.style.display = 'none';
     gameOverScreen.style.display = 'block';
-    gameOverTitleElement.innerText = title;
+    setText(gameOverTitleElement, title);
     finalScoreElement.innerText = player.score;
     if (title === 'Game Over' && runGradeElement) {
         runGradeElement.hidden = true;
@@ -1851,7 +1841,7 @@ function showHighScoreModal(title = 'Game Over') {
 }
 
 saveScoreBtn.addEventListener('click', () => {
-    const name = nicknameInput.value.trim() || 'Anonymous';
+    const name = nicknameInput.value.trim() || t('Anonymous');
     const newScore = { name, score: player.score };
     const mode = currentBoardMode();
 
@@ -1894,7 +1884,7 @@ function beginSelectedRun() {
     }
     resetGameState();
     emitMatchEvent('match-start');
-    gameOverTitleElement.innerText = 'Game Over';
+    setText(gameOverTitleElement, 'Game Over');
     playerReset();
     lastTime = performance.now();
     scheduleUpdate();
@@ -1941,10 +1931,10 @@ scenarioRetryBtn.addEventListener('click', () => startScenarioStage(activeScenar
 scenarioResultMapBtn.addEventListener('click', leaveScenarioForMap);
 scenarioRewardOpenBtn.addEventListener('click', showScenarioReward);
 scenarioResetBtn.addEventListener('click', () => {
-    if (!window.confirm('Neon Circuit 진행도를 초기화하시겠습니까?')) return;
+    if (!window.confirm(t('Reset your Neon Circuit progress?'))) return;
     const candidate = createScenarioProgress();
     if (!writeScenarioProgress(candidate)) {
-        scenarioResetError.textContent = 'New Campaign could not be saved. Check browser storage and try again.';
+        scenarioResetError.textContent = t('New Campaign could not be saved. Check browser storage and try again.');
         return;
     }
     scenarioProgress = candidate;
@@ -2035,6 +2025,24 @@ quitToMenuBtn.addEventListener('click', () => {
 menuSettingsBtn.addEventListener('click', () => showSettings('start'));
 pauseSettingsBtn.addEventListener('click', () => showSettings('pause'));
 settingsBackBtn.addEventListener('click', closeSettings);
+settingsLanguage.addEventListener('change', () => {
+    persistSettings({...settings, language: settingsLanguage.value});
+    refreshLanguage();
+});
+
+function refreshLanguage() {
+    document.documentElement.lang = getLanguage();
+    applyTranslations();
+    syncSettingsUI();
+    selectGameMode(gameModeSelect.value);
+    refreshPbSummary();
+    refreshCampaignSummary();
+    renderCosmeticPickers();
+    renderPauseControls();
+    updateLeaderboard();
+    renderLeaderboard(leaderboardList, readLeaderboard(localStorage, currentBoardMode()));
+    updateScore();
+}
 
 settingsResetBtn.addEventListener('click', () => {
     const preset = presetGuidelineRadio.checked ? 'guideline' : 'classic';
@@ -2320,7 +2328,7 @@ document.addEventListener('keyup', event => {
 
 function quitGame() {
     if (!player.matrix || isGameOver) return;
-    if (!confirm('정말로 게임을 종료하시겠습니까?')) return;
+    if (!confirm(t('Quit the current game?'))) return;
     returnToMenu();
 }
 
@@ -2410,6 +2418,7 @@ if (testMode) {
 
 //Initialize Game
 restorePreferences();
+refreshLanguage();
 selectGameMode(gameModeSelect.value);
 applyCosmetics();
 refreshPbSummary();

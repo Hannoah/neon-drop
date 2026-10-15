@@ -1,3 +1,5 @@
+import {t} from './i18n.js';
+
 export const LEADERBOARD_GENERATION = 3;
 export const LEADERBOARD_KEY = 'tetrisLeaderboard';
 export const DEFAULT_LEADERBOARD_MODE = 'marathon';
@@ -67,7 +69,7 @@ export function renderLeaderboard(element, scores) {
     if (scores.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'lb-row';
-        empty.textContent = 'No records yet';
+        empty.textContent = t('No records yet');
         element.appendChild(empty);
         return;
     }

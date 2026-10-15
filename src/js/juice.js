@@ -1,3 +1,5 @@
+import {t} from './i18n.js';
+
 const CODE_GLYPHS = {
     ArrowLeft: '←',
     ArrowRight: '→',
@@ -20,7 +22,7 @@ export const UNLOCK_LABELS = {
 };
 
 export function unlockLabel(id) {
-    return UNLOCK_LABELS[id] || id;
+    return t(UNLOCK_LABELS[id] || id);
 }
 
 export function formatUnlocks(unlocks) {
@@ -52,7 +54,7 @@ export function controlLegendRows(bindings = {}) {
         {label: 'Hard Drop', keys: bindingPhrase(bindings.hardDrop)},
         {label: 'Hold', keys: bindingPhrase(bindings.hold)},
         {label: 'Pause', keys: bindingPhrase(bindings.pause)},
-    ];
+    ].map(row => ({...row, label: t(row.label)}));
 }
 
 export function msUntilNextUtcDay(now = new Date()) {
@@ -62,13 +64,13 @@ export function msUntilNextUtcDay(now = new Date()) {
 
 export function formatHoursLeft(ms) {
     const hours = Math.max(1, Math.ceil(Math.max(0, ms) / 3600000));
-    return `${hours}h left`;
+    return t('{hours}h left', {hours});
 }
 
 export function dailyCardDetail({dateKey, streak = 0, msLeft = 0} = {}) {
     const hours = formatHoursLeft(msLeft);
-    if (streak > 0) return `STREAK ${streak} · ${hours}`;
-    return `Seed ${dateKey} · ${hours}`;
+    if (streak > 0) return t('STREAK {streak} · {hours}', {streak, hours});
+    return t('Seed {date} · {hours}', {date: dateKey, hours});
 }
 
 export function fanfareKind({rowCount = 0, tSpin = 'none', perfectClear = false, combo = 0} = {}) {
@@ -81,10 +83,10 @@ export function fanfareKind({rowCount = 0, tSpin = 'none', perfectClear = false,
 }
 
 export function formatRunGrade({grade, stars = 0, isPb = false, unlocks = []} = {}) {
-    const parts = [`Grade ${grade}`];
+    const parts = [t('Grade {grade}', {grade})];
     if (stars > 0) parts.push('★'.repeat(stars));
-    if (isPb) parts.push('NEW PB');
+    if (isPb) parts.push(t('NEW PB'));
     const unlocked = formatUnlocks(unlocks);
-    if (unlocked) parts.push(`UNLOCKED ${unlocked}`);
+    if (unlocked) parts.push(t('UNLOCKED {names}', {names: unlocked}));
     return parts.join(' · ');
 }

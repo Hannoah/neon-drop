@@ -29,7 +29,7 @@ test('declares Concrete Arcade shell tokens and Board Center layout', async () =
     assert.match(html, /href="src\/css\/shell\.css"/);
     assert.match(css, /--bg:\s*#121212/);
     assert.match(css, /--accent:\s*#ff6a3d/);
-    assert.match(html, /id="start-game-btn"[^>]*>Play /);
+    assert.match(html, /id="start-game-btn"[^>]*><span data-i18n="Play">Play<\/span>/);
     assert.match(html, /id="play-mode-hint"/);
     assert.match(html, /id="first-run-nudge"/);
     assert.match(html, /id="unlock-toast"/);

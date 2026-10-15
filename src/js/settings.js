@@ -1,3 +1,5 @@
+import {resolveLanguage} from './i18n.js';
+
 export const DEFAULT_TIMING = {das: 167, arr: 33, lockDelay: 500};
 
 export const CLASSIC_BINDINGS = {
@@ -28,6 +30,7 @@ export const GUIDELINE_BINDINGS = {
 
 export const DEFAULT_SETTINGS = {
     version: 2,
+    language: 'en',
     mode: 'marathon',
     bgm: true,
     sfx: true,
@@ -40,7 +43,9 @@ const BINDING_ACTIONS = Object.keys(CLASSIC_BINDINGS);
 
 function cloneBindings(bindings) {
     return Object.fromEntries(
-        BINDING_ACTIONS.map(action => [action, [...(bindings[action] ?? [])]]),
+        BINDING_ACTIONS.map(action => [action, Array.isArray(bindings[action])
+            ? bindings[action].filter(code => typeof code === 'string' && code.length > 0)
+            : [...CLASSIC_BINDINGS[action]]]),
     );
 }
 
@@ -57,10 +62,13 @@ function ensureDefault180(bindings) {
 
 export function clampTiming(timing) {
     const source = timing ?? {};
+    const das = Number(source.das);
+    const arr = Number(source.arr);
+    const lockDelay = Number(source.lockDelay);
     return {
-        das: Math.min(400, Math.max(50, Number(source.das) || DEFAULT_TIMING.das)),
-        arr: Math.min(100, Math.max(0, Number(source.arr) ?? DEFAULT_TIMING.arr)),
-        lockDelay: Math.min(1000, Math.max(100, Number(source.lockDelay) || DEFAULT_TIMING.lockDelay)),
+        das: Math.min(400, Math.max(50, Number.isFinite(das) ? das : DEFAULT_TIMING.das)),
+        arr: Math.min(100, Math.max(0, Number.isFinite(arr) ? arr : DEFAULT_TIMING.arr)),
+        lockDelay: Math.min(1000, Math.max(100, Number.isFinite(lockDelay) ? lockDelay : DEFAULT_TIMING.lockDelay)),
     };
 }
 
@@ -84,6 +92,7 @@ export function normalizeSettings(raw) {
 
     return {
         version: 2,
+        language: resolveLanguage(input.language),
         mode: typeof input.mode === 'string' ? input.mode : DEFAULT_SETTINGS.mode,
         bgm: typeof input.bgm === 'boolean' ? input.bgm : DEFAULT_SETTINGS.bgm,
         sfx: typeof input.sfx === 'boolean' ? input.sfx : DEFAULT_SETTINGS.sfx,

@@ -33,7 +33,7 @@ function createServer() {
 }
 
 async function openPage(browser, url) {
-  const page = await browser.newPage();
+  const page = await browser.newPage({locale: 'en-US'});
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(error));
   await page.goto(url);
@@ -355,7 +355,7 @@ async function testScenarioMap(browser, url) {
   assert.equal(await page.evaluate(() => scenarioProgress.unlockedStage), 3,
     'cancelling New Campaign must keep progress');
   assert.equal(await page.evaluate(() => window.__scenarioResetPrompt),
-    'Neon Circuit 진행도를 초기화하시겠습니까?');
+    'Reset your Neon Circuit progress?');
   const resetFailureBefore = await page.evaluate(() => {
     window.confirm = () => true;
     window.__scenarioSetItem = Storage.prototype.setItem;
@@ -535,6 +535,7 @@ async function testScenarioResponsivePolish(browser, url) {
   await page.close();
 
   const context = await browser.newContext({
+    locale: 'en-US',
     viewport: {width: 390, height: 844},
     hasTouch: true,
     isMobile: true,
@@ -2713,10 +2714,25 @@ async function testReviewFixes(browser, url) {
     inputController.reset();
     inputController.setTiming({das: 50, arr: 0});
     inputController.press('moveLeft', emitHorizontal);
-    inputController.tick(50, emitHorizontal);
+    dropCounter = 0;
+    lastTime = performance.now();
+    update(lastTime + 50);
     return player.pos.x;
   });
   assert.equal(arrZero, 0, 'ARR 0 must slide to the wall after DAS');
+
+  const noLineSpin = await page.evaluate(() => {
+    gameMode = 'marathon';
+    player.score = 0;
+    player.level = 1;
+    backToBackActive = true;
+    b2bChain = 2;
+    combo = 0;
+    scoreLines(0, 'full');
+    return {score: player.score, chain: b2bChain, active: backToBackActive};
+  });
+  assert.deepEqual(noLineSpin, {score: 400, chain: 2, active: true},
+    'zero-line T-Spin must preserve B2B without earning its clear bonus');
 
   assert.equal(pageErrors.length, 0, 'review fixes must not throw');
   await page.close();
@@ -2795,6 +2811,93 @@ async function testArcadeFeel(browser, url) {
   await page.close();
 }
 
+async function testKoreanLocalization(browser, url) {
+  const context = await browser.newContext({locale: 'ko-KR', viewport: {width: 1280, height: 900}});
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', error => errors.push(error));
+  try {
+    await page.goto(url);
+    assert.equal(await page.locator('html').getAttribute('lang'), 'ko');
+    assert.match(await page.locator('#start-game-btn').innerText(), /[가-힣]/);
+    assert.match(await page.locator('#touch-drop').getAttribute('aria-label'), /[가-힣]/);
+    await page.locator('#menu-settings-btn').click();
+    assert.equal(await page.locator('#settings-language').inputValue(), 'ko');
+    assert.match(await page.locator('#settings-screen-title').innerText(), /[가-힣]/);
+
+    await page.locator('#settings-language').selectOption('en');
+    assert.equal(await page.locator('html').getAttribute('lang'), 'en');
+    assert.equal(await page.locator('#settings-screen-title').innerText(), 'Settings');
+    await page.reload();
+    assert.equal(await page.locator('html').getAttribute('lang'), 'en', 'saved language overrides Korean browser locale');
+    await page.locator('#menu-settings-btn').click();
+    await page.locator('#settings-language').selectOption('ko');
+    await page.locator('#settings-back-btn').click();
+    await page.reload();
+    assert.equal(await page.locator('html').getAttribute('lang'), 'ko');
+    fs.mkdirSync(path.join(root, 'output'), {recursive: true});
+    await page.screenshot({path: path.join(root, 'output/korean-menu-desktop.png'), animations: 'disabled'});
+
+    await page.locator('#start-game-btn').click();
+    assert.match(await page.locator('#mode').innerText(), /[가-힣]/);
+    assert.match(await page.locator('#scenario-objective').innerText(), /[가-힣]/);
+    await page.locator('#pause-game-btn').click();
+    assert.match(await page.locator('#pause-controls').innerText(), /[가-힣]/);
+    await page.locator('#pause-settings-btn').click();
+    const before = await page.evaluate(() => ({score: player.score, matrix: player.matrix, pos: player.pos}));
+    await page.locator('#settings-language').selectOption('en');
+    assert.deepEqual(await page.evaluate(() => ({score: player.score, matrix: player.matrix, pos: player.pos})), before,
+      'language switching must preserve the paused game');
+    assert.equal(await page.locator('#mode').innerText(), 'Marathon');
+    await page.locator('#settings-language').selectOption('ko');
+    await page.locator('#settings-back-btn').click();
+    await page.locator('#quit-to-menu-btn').click();
+
+    await page.evaluate(() => {
+      showHighScoreModal();
+      document.getElementById('nickname').value = 'My닉네임';
+    });
+    assert.match(await page.locator('#game-over-title').innerText(), /[가-힣]/);
+    assert.equal(await page.locator('#nickname').inputValue(), 'My닉네임');
+    await page.locator('#game-over-menu-btn').click();
+    await page.locator('#scenario-continue-btn').click();
+    assert.match(await page.locator('#scenario-stage-objective').innerText(), /[가-힣]/);
+    assert.match(await page.locator('[data-scenario-stage="1"]').getAttribute('aria-label'), /[가-힣]/);
+    await page.locator('#scenario-play-btn').click();
+    assert.match(await page.locator('#scenario-briefing-modifier').innerText(), /[가-힣]/);
+    await page.locator('#scenario-stage-start-btn').click();
+    await page.evaluate(() => completeScenarioStage());
+    assert.match(await page.locator('#scenario-result-title').innerText(), /[가-힣]/);
+    await page.locator('#scenario-reward-open-btn').click();
+    assert.match(await page.locator('[data-scenario-upgrade="pulse"]').innerText(), /[가-힣]/);
+    await page.locator('[data-scenario-upgrade="pulse"]').click();
+    await page.locator('#scenario-map-back-btn').click();
+
+    await page.setViewportSize({width: 390, height: 844});
+    await page.screenshot({path: path.join(root, 'output/korean-menu-mobile.png'), animations: 'disabled'});
+    await page.locator('#menu-settings-btn').click();
+    const settingsOverflow = await page.locator('#settings-screen').evaluate(element => {
+      element.scrollTop = 0;
+      element.scrollLeft = 0;
+      return {width: element.clientWidth, contentWidth: element.scrollWidth};
+    });
+    assert.ok(settingsOverflow.contentWidth <= settingsOverflow.width + 1,
+      `Korean settings must fit inside the modal: ${JSON.stringify(settingsOverflow)}`);
+    await page.screenshot({path: path.join(root, 'output/korean-settings-mobile.png'), animations: 'disabled'});
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false,
+      'Korean UI must not create horizontal page overflow');
+    await page.evaluate(() => {
+      Storage.prototype.setItem = () => { throw new DOMException('Blocked', 'SecurityError'); };
+    });
+    await page.locator('#settings-language').selectOption('en');
+    assert.equal(await page.locator('html').getAttribute('lang'), 'en', 'language changes work when saving is blocked');
+    assert.equal(await page.locator('#settings-screen-title').innerText(), 'Settings');
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+}
+
 (async () => {
   const server = createServer();
   const browser = await chromium.launch({ headless: true });
@@ -2837,6 +2940,7 @@ async function testArcadeFeel(browser, url) {
     await testUsabilityUI(browser, url);
     await testReviewFixes(browser, url);
     await testArcadeFeel(browser, url);
+    await testKoreanLocalization(browser, url);
     console.log('All Neon Drop tests passed.');
   } finally {
     await browser.close();
