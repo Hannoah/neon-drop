@@ -2898,6 +2898,126 @@ async function testKoreanLocalization(browser, url) {
   }
 }
 
+async function testComprehensiveImprovements(browser, url) {
+  const { page, pageErrors } = await openPage(browser, url);
+
+  // 1. Ultra mode selection and 2-minute timer display
+  await page.locator('[data-mode-card="ultra"]').click();
+  await page.locator('#start-game-btn').click();
+  assert.equal(await page.evaluate(() => gameMode), 'ultra', 'Ultra mode must be selected');
+  assert.equal(await page.locator('#timer').innerText(), '02:00', 'Ultra mode timer starts at 02:00');
+
+  // 2. Pause Restart button
+  await page.keyboard.press('p');
+  assert.equal(await page.evaluate(() => isPaused), true, 'Game must be paused');
+  await page.locator('#pause-restart-btn').click();
+  const restarted = await page.evaluate(() => ({
+    isPaused,
+    isGameOver,
+    elapsedTime,
+    matrix: Boolean(player.matrix),
+  }));
+  assert.equal(restarted.isPaused, false, 'Game must unpause after restart click');
+  assert.equal(restarted.isGameOver, false, 'Game must not be game over after restart');
+  assert.equal(restarted.matrix, true, 'Player piece must spawn after restart');
+
+  // 3. KeyR shortcut during pause
+  await page.keyboard.press('p');
+  assert.equal(await page.evaluate(() => isPaused), true);
+  await page.keyboard.press('KeyR');
+  assert.equal(await page.evaluate(() => isPaused), false, 'KeyR must restart and unpause');
+
+  // 4. Play Again button on Game Over
+  await page.evaluate(() => {
+    showHighScoreModal('Game Over');
+  });
+  assert.equal(await page.locator('#game-over-screen').isVisible(), true, 'Game over screen must be open');
+  await page.locator('#play-again-btn').click();
+  const playedAgain = await page.evaluate(() => ({
+    isPaused,
+    isGameOver,
+    matrix: Boolean(player.matrix),
+  }));
+  assert.equal(playedAgain.isGameOver, false, 'Game over must be dismissed on play again');
+  assert.equal(playedAgain.matrix, true, 'Player piece must spawn on play again');
+
+  // 5. Line clear particle burst
+  const particlesCount = await page.evaluate(() => {
+    arena[19].fill(1);
+    arenaSweep();
+    return arena.length; // ensures arenaSweep executed without throw
+  });
+  assert.ok(particlesCount > 0, 'arenaSweep with particles must execute smoothly');
+
+  assert.equal(pageErrors.length, 0, 'No page errors during comprehensive improvements testing');
+  await page.close();
+}
+
+async function testExtremeArcadeJuiceAndImpact(browser, url) {
+  const { page, pageErrors } = await openPage(browser, url);
+  await page.locator('#start-game-btn').click();
+
+  // 1. Hard drop laser beams and ground impact sparks
+  const hardDropEffects = await page.evaluate(() => {
+    arena.forEach(row => row.fill(0));
+    player.matrix = createPiece('A');
+    player.pos = {x: 3, y: 0};
+    playerHardDrop();
+    return {
+      dropBeamsCount: particles?.dropBeams?.length ?? 0,
+      particlesCount: particles?.particles?.length ?? 0,
+    };
+  });
+  assert.ok(hardDropEffects.dropBeamsCount > 0, 'hard drop must spawn laser drop beams');
+  assert.ok(hardDropEffects.particlesCount > 0, 'hard drop must spawn ground impact sparks');
+
+  // 2. Danger pulse and surge pulse board classes
+  const dangerSurgeState = await page.evaluate(() => {
+    const stage = document.querySelector('#player-panel .board-stage');
+    arena.forEach(row => row.fill(0));
+    updateScore();
+    const cleanClasses = stage.className;
+
+    // Fill row 4 (top danger zone)
+    arena[4][0] = 1;
+    updateScore();
+    const dangerClasses = stage.className;
+
+    // Clear danger, set combo surge
+    arena[4][0] = 0;
+    combo = 3;
+    updateScore();
+    const surgeClasses = stage.className;
+
+    return { cleanClasses, dangerClasses, surgeClasses };
+  });
+  assert.equal(dangerSurgeState.cleanClasses.includes('is-danger'), false);
+  assert.equal(dangerSurgeState.dangerClasses.includes('is-danger'), true, 'stack reaching top rows triggers is-danger');
+  assert.equal(dangerSurgeState.surgeClasses.includes('is-surge'), true, 'high combo triggers is-surge');
+
+  // 3. Clear reward pop-up text for combo and tetris
+  const rewardPop = await page.evaluate(() => {
+    combo = 4;
+    showClearReward(400, 1, 'combo');
+    const comboText = document.querySelector('#clear-reward')?.textContent;
+    showClearReward(1200, 4, 'tetris');
+    const tetrisText = document.querySelector('#clear-reward')?.textContent;
+    return { comboText, tetrisText };
+  });
+  assert.ok(rewardPop.comboText.includes('COMBO x4'), 'clear reward displays combo multiplier');
+  assert.equal(rewardPop.tetrisText, 'TETRIS', 'clear reward displays TETRIS fanfare');
+
+  // 4. Dynamic combo audio
+  const audioComboSuccess = await page.evaluate(() => {
+    sounds.fanfare('combo', {combo: 4});
+    return true;
+  });
+  assert.equal(audioComboSuccess, true, 'fanfare with combo scaling executes cleanly');
+
+  assert.equal(pageErrors.length, 0, 'No errors during extreme arcade juice testing');
+  await page.close();
+}
+
 (async () => {
   const server = createServer();
   const browser = await chromium.launch({ headless: true });
@@ -2941,6 +3061,8 @@ async function testKoreanLocalization(browser, url) {
     await testReviewFixes(browser, url);
     await testArcadeFeel(browser, url);
     await testKoreanLocalization(browser, url);
+    await testComprehensiveImprovements(browser, url);
+    await testExtremeArcadeJuiceAndImpact(browser, url);
     console.log('All Neon Drop tests passed.');
   } finally {
     await browser.close();

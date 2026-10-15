@@ -106,6 +106,7 @@
             <dl id="pause-controls" class="control-legend"></dl>
             <div class="pause-actions">
                 <button id="resume-game-btn" type="button" data-i18n="Resume">Resume</button>
+                <button id="pause-restart-btn" type="button" data-i18n="Restart">Restart</button>
                 <button id="pause-settings-btn" type="button" data-i18n="Settings">Settings</button>
                 <button id="quit-to-menu-btn" class="btn-exit" type="button" data-i18n="Quit to Menu">Quit to Menu</button>
             </div>
@@ -118,6 +119,7 @@
             <select id="game-mode" class="visually-hidden" aria-label="Game mode" data-i18n-aria-label="Game mode">
                 <option value="marathon" data-i18n="Marathon">Marathon</option>
                 <option value="sprint" data-i18n="Sprint · 40 Lines">Sprint · 40 Lines</option>
+                <option value="ultra" data-i18n="Ultra · 2 Min">Ultra · 2 Min</option>
                 <option value="versus" data-i18n="2P · Versus AI">2P · Versus AI</option>
                 <option value="daily" data-i18n="Daily Challenge">Daily Challenge</option>
                 <option value="cheese" data-i18n="Cheese">Cheese</option>
@@ -138,6 +140,7 @@
                     <div class="mode-options" role="group" aria-label="Choose a ranked mode" data-i18n-aria-label="Choose a ranked mode">
                         <button type="button" class="mode-card" data-mode-card="marathon" data-mode="marathon" aria-pressed="true"><strong data-i18n="Marathon">Marathon</strong><span aria-hidden="true" data-i18n="Clear Level 15 · graded">Clear Level 15 · graded</span></button>
                         <button type="button" class="mode-card" data-mode-card="sprint" data-mode="sprint" aria-pressed="false"><strong data-i18n="Sprint">Sprint</strong><span aria-hidden="true" data-i18n="40 lines · graded PB">40 lines · graded PB</span></button>
+                        <button type="button" class="mode-card" data-mode-card="ultra" data-mode="ultra" aria-pressed="false"><strong data-i18n="Ultra">Ultra</strong><span aria-hidden="true" data-i18n="2-min score attack">2-min score attack</span></button>
                         <button type="button" class="mode-card" data-mode-card="daily" data-mode="daily" aria-pressed="false"><strong data-i18n="Daily">Daily</strong><span aria-hidden="true" data-i18n="Seeded 40-line race">Seeded 40-line race</span></button>
                         <button type="button" class="mode-card" data-mode-card="versus" data-mode="versus" aria-pressed="false"><strong data-i18n="Versus AI">Versus AI</strong><span aria-hidden="true" data-i18n="Garbage battle">Garbage battle</span></button>
                         <button type="button" class="mode-card" data-mode-card="cheese" data-mode="cheese" aria-pressed="false"><strong data-i18n="Cheese">Cheese</strong><span aria-hidden="true" data-i18n="Dig through garbage">Dig through garbage</span></button>
@@ -272,6 +275,7 @@
                 <button id="save-score-btn" type="button" data-i18n="Save Score">Save Score</button>
             </div>
             <div id="game-over-footer">
+                <button id="play-again-btn" type="button" data-i18n="Play Again">Play Again</button>
                 <button id="game-over-menu-btn" type="button" data-i18n="Main Menu">Main Menu</button>
             </div>
         </div>

@@ -105,3 +105,13 @@ test('daily clear starts a streak and continues on consecutive UTC days', () => 
     });
     assert.equal(skipped.meta.stats.dailyStreak, 1, 'a missed day must reset the streak');
 });
+
+test('recordRun records ultra mode without throwing', () => {
+    const meta = createDefaultMeta();
+    const result = recordRun(meta, {
+        mode: 'ultra',
+        elapsedMs: 120000,
+        score: 55000,
+    });
+    assert.ok(result.meta);
+});

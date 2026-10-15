@@ -2,6 +2,11 @@
 
 ## 2026-10-15
 
+- 극강의 아케이드 게임성 & UI 비주얼 임팩트 강화: 하드 드롭 레이저 빔 기둥(`spawnDropBeams`) 및 지면 착지 스파크(`spawnGroundImpact`), 보드 위험/서지 펄스 네온 아우라(`.is-danger`, `.is-surge`), 고스트 미노 호흡 애니메이션, 액션 팝업 네온 글로우 및 콤보 팝업(`clearRewardPop`), 콤보 횟수 연동 펜타토닉 음계 피치 상승 및 하드 드롭 서브베이스 펀치 사운드 구현.
+- 최종 `npm test`: 유닛 테스트 154개 및 Playwright 브라우저 회귀 테스트(35개 스위트) 전체 통과.
+- 비주얼 파티클/사운드 연출 강화, QoL 빠른 재시작(R키, Pause/GameOver 버튼), 2분 타임어택 Ultra 모드 추가 및 모듈화(`particles.js`, `modal.js`)를 구현했다.
+- 최종 `npm test`: 유닛 테스트 153개와 Playwright 브라우저 회귀 테스트(34개 스위트) 전체 통과.
+- 상세 내용: [[comprehensive-improvements-2026-10-15]]
 - 구현 커밋 `31a3dd3`을 origin 작업 브랜치에 푸시하고, 배포 커밋 `e235b8e`을 `gh-pages`에 게시했다.
 - https://hannoah.github.io/neon-drop/ 배포 성공. 실제 사이트에서 HTTP 200, 한국어 UI, 언어 저장, 모바일 설정, 게임 시작·일시정지를 확인했다.
 - 상세 내용: [[deployment-2026-10-15]]

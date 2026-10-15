@@ -64,4 +64,8 @@ test('fanfare plays a stacked triad for tetris clears', () => {
     assert.ok(system.audioCtx.oscillators.length > before);
     assert.ok(system.sounds.hardDrop);
     assert.ok(system.sounds.unlock);
+    assert.ok(system.sounds.levelUp);
+    assert.ok(system.sounds.restart);
+    system.sounds.levelUp();
+    system.sounds.restart();
 });

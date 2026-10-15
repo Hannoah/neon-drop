@@ -20,6 +20,7 @@ Playwright 회귀는 `index.html?test=1`로 페이지를 열어 게임 훅을 �
 
 - Marathon: Level 15 클리어 · 시간 그레이드(S–D) · PB 페이스 고스트 · EDGE/STORM 페이즈
 - Sprint / Daily: 40라인 레이스(Daily는 UTC 시드 고정) · 그레이드 · 로컬 PB · Daily는 UTC 스트릭
+- Ultra: 2분 타임어택 · 120초 카운트다운 타이머 · 점수 경쟁
 - Arcade: Cheese (가비지가 보드에서 사라질 때까지) · Invisible · 20G (프레임마다 바닥까지 낙하)
 - Versus AI: 오프라인 AI와 Garbage를 주고받는 대전
 - Tutorial: 라인 클리어 → Double → Hold 짧은 온보딩 (첫 실행 때 메뉴에서 안내)
@@ -55,6 +56,7 @@ Neon Circuit의 경로는 다음과 같습니다.
 - `Space`: 하드 드롭 (칸마다 +2점 후 즉시 고정)
 - `C`: Hold
 - `P` 또는 `Esc`: 일시정지, `Q`: 메인 메뉴로 종료
+- `R`: 일시정지 중 또는 게임 오버 화면에서 빠른 재시작 (Quick Restart)
 
 Guideline 프리셋은 회전에 `Z`/`X`(및 `↑` CW)를 쓰고 180은 역시 `A`입니다. 저장된 설정에서 180이 비어 있고 `A`가 비어 있으면 자동으로 `A`를 채웁니다. 터치의 좌·우·소프트 드롭은 같은 DAS/ARR·홀드 로직을 쓰고, **180** 버튼이 있습니다. 일시정지 화면에 현재 바인딩 치트시트가 뜹니다.
 
@@ -96,6 +98,8 @@ src/js/
 ├── board.js         # 보드/피스 유틸 (충돌, 병합, 7-bag 헬퍼)
 ├── queue.js         # Next 5 피스 큐
 ├── srs.js           # SRS 회전·월킥·180
+├── particles.js     # 네온 라인 클리어 스파크 및 충격파 파티클
+├── modal.js         # 접근성 모달 관리자 및 포커스 트랩
 ├── juice.js         # 언락 카피·조작 범례·클리어 팬페어
 ├── gravity.js       # 낙하 스텝 / 20G
 ├── lock.js          # 락 딜레이 상태
