@@ -166,6 +166,9 @@ const resumeGameBtn = document.getElementById('resume-game-btn');
 const pauseRestartBtn = document.getElementById('pause-restart-btn');
 const pauseSettingsBtn = document.getElementById('pause-settings-btn');
 const quitToMenuBtn = document.getElementById('quit-to-menu-btn');
+const quitConfirmScreen = document.getElementById('quit-confirm-screen');
+const quitConfirmYesBtn = document.getElementById('quit-confirm-yes-btn');
+const quitConfirmNoBtn = document.getElementById('quit-confirm-no-btn');
 const settingsScreen = document.getElementById('settings-screen');
 const settingsLanguage = document.getElementById('settings-language');
 const menuSettingsBtn = document.getElementById('menu-settings-btn');
@@ -684,6 +687,7 @@ function returnToMenu() {
     stopBGM();
     isPaused = false;
     isGameOver = true;
+    if (quitConfirmScreen) quitConfirmScreen.style.display = 'none';
     resetGameState();
     activeScenarioStage = null;
     showStartScreen();
@@ -2130,6 +2134,13 @@ modalOverlay.addEventListener('keydown', event => {
         event.preventDefault();
         event.stopPropagation();
         closeSettings();
+        return;
+    }
+    if (event.key === 'Escape' && quitConfirmScreen && quitConfirmScreen.style.display !== 'none') {
+        event.preventDefault();
+        event.stopPropagation();
+        cancelQuitConfirm();
+        return;
     }
 });
 
@@ -2172,6 +2183,7 @@ function resetGameState() {
     configureRunSeedAndQueue();
     inputController.reset();
     particles.clear();
+    if (quitConfirmScreen) quitConfirmScreen.style.display = 'none';
     document.querySelector('#player-panel .board-stage')?.classList.remove('is-danger', 'is-surge');
     lockState = createLockState(settings.timing.lockDelay);
     player.pos = {x: 0, y: 0};
@@ -2382,11 +2394,32 @@ document.addEventListener('keyup', event => {
     }
 });
 
+function showQuitConfirm() {
+    if (!player.matrix || isGameOver) return;
+    if (!isPaused) togglePause();
+    if (pauseScreen) pauseScreen.style.display = 'none';
+    if (quitConfirmScreen) {
+        quitConfirmScreen.style.display = 'block';
+        openModal('quit-confirm-title', quitConfirmNoBtn);
+    }
+}
+
+function cancelQuitConfirm() {
+    if (quitConfirmScreen) quitConfirmScreen.style.display = 'none';
+    closeModal();
+    if (isPaused) togglePause();
+}
+
 function quitGame() {
     if (!player.matrix || isGameOver) return;
-    if (!confirm(t('Quit the current game?'))) return;
-    returnToMenu();
+    showQuitConfirm();
 }
+
+quitConfirmYesBtn?.addEventListener('click', () => {
+    if (quitConfirmScreen) quitConfirmScreen.style.display = 'none';
+    returnToMenu();
+});
+quitConfirmNoBtn?.addEventListener('click', cancelQuitConfirm);
 
 pauseGameBtn.addEventListener('click', () => {
     if (!canPauseGame()) return;
@@ -2398,6 +2431,7 @@ exitGameBtn.addEventListener('click', quitGame);
 const exposed = {
     arena, player, opponent, pieceQueue, inputController,
     gameOverTitleElement, gameOverScreen, startScreen, pauseScreen, settingsScreen, modalOverlay,
+    quitConfirmScreen, showQuitConfirm, cancelQuitConfirm,
     calculateGarbageAttack, scoreLines, createPiece, createMatrix,
     chooseOpponentMove, evaluateOpponentBoard, nextPieceType, initialRotationFor,
     detectTSpin, isPerfectClear, tryRotateSrs, tryRotate180,

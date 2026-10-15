@@ -946,11 +946,13 @@ canvas {
     text-align: left;
 }
 
-#pause-screen {
+#pause-screen,
+#quit-confirm-screen {
     width: min(calc(100% - 32px), 400px);
     text-align: left;
 }
-#pause-screen h2 { text-align: left; }
+#pause-screen h2,
+#quit-confirm-screen h2 { text-align: left; }
 
 .pause-actions {
     display: grid;

@@ -247,7 +247,10 @@ export const translations = {
         "20G Clear!": "20G 클리어!",
         "Tutorial Complete!": "튜토리얼 완료!",
         "Clear!": "클리어!",
-        "Marathon Clear!": "마라톤 클리어!"
+        "Marathon Clear!": "마라톤 클리어!",
+        "Quit Game?": "게임을 종료하시겠습니까?",
+        "Current game progress will be lost.": "현재 진행 중인 게임이 저장되지 않고 종료됩니다.",
+        "Cancel": "취소"
     }
 };
 
