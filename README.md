@@ -2,6 +2,8 @@
 
 브라우저에서 실행하는 Vanilla JavaScript Tetris입니다. Guideline급 조작(SRS, DAS/ARR, 락 딜레이, 홀드 소프트 드롭), Next 5, T-Spin/Perfect Clear 점수, 설정 화면을 지원합니다.
 
+[온라인 플레이](https://hannoah.github.io/neon-drop/)
+
 UI는 **Concrete Arcade** 방향입니다: Syne + IBM Plex Sans, 토큰(`#121212` / `#1a1a1a` / `#2e2e2e` / `#f2f2f2` / `#8a8a8a` / accent `#ff6a3d`), Board Center 레이아웃(보드 히어로·Hold/Next 좌·스코어 우), Title Screen 메뉴, 글로우 없는 직각 크롬. 스타일은 `src/css/shell.css`.
 
 ## 실행과 테스트
@@ -110,6 +112,10 @@ src/js/
 ```
 
 `tetris.js`는 DOM, 게임 루프, 입력을 담당합니다. 자동화 테스트용 훅은 `?test=1`일 때만 `window`에 노출됩니다.
+
+## 배포
+
+GitHub Pages는 `gh-pages` 브랜치의 루트를 게시합니다. 배포 브랜치에는 검증한 소스 커밋의 `index.html`, `tetris.js`, `favicon.svg`, `src/`와 `.nojekyll`만 포함합니다. 소스 작업 브랜치 푸시만으로는 배포가 갱신되지 않으며, 새 배포에는 이 실행 파일들을 `gh-pages`에 반영해야 합니다.
 
 ## 보안 주의
 

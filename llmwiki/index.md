@@ -4,6 +4,7 @@ Neon Drop 프로젝트의 결정, 수정 내역, 검증 결과를 기록한다.
 
 ## Reliability
 
+- [[deployment-2026-10-15|2026-10-15 GitHub Pages 배포]]
 - [[project-review-2026-10-15|2026-10-15 프로젝트 리뷰와 결함 수정]]
 - [[neon-drop-reliability-2026-08-01|2026-08-01 프로젝트 리뷰와 신뢰성 개선]]
 - [[project-review-2026-08-08|2026-08-08 프로젝트 리뷰]]
