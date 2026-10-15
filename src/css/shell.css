@@ -15,8 +15,9 @@
     --hud-panel: var(--panel);
     --hud-border: var(--border);
     --hud-muted: var(--muted);
-    --font-display: "Syne", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-    --font-ui: "IBM Plex Sans", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    --font-display: "Orbitron", "Black Han Sans", "Syne", "Pretendard", -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-ui: "Pretendard", "Chakra Petch", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-tech: "Orbitron", "Chakra Petch", "Pretendard", monospace;
     --radius: 0;
 }
 
@@ -153,9 +154,10 @@ button:focus-visible, select:focus-visible, summary:focus-visible, input:focus-v
 .brand-lockup span {
     margin-top: 4px;
     color: var(--muted);
+    font-family: var(--font-tech);
     font-size: 10px;
-    font-weight: 500;
-    letter-spacing: 0.14em;
+    font-weight: 600;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
 }
 
@@ -179,8 +181,14 @@ button:focus-visible, select:focus-visible, summary:focus-visible, input:focus-v
     font-weight: 700;
 }
 
+#timer {
+    font-family: var(--font-tech);
+    letter-spacing: 0.08em;
+}
+
 #scenario-objective {
     color: var(--danger);
+    font-family: var(--font-tech);
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.06em;
@@ -188,6 +196,7 @@ button:focus-visible, select:focus-visible, summary:focus-visible, input:focus-v
 
 #pace-ghost {
     color: var(--muted);
+    font-family: var(--font-tech);
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.04em;
@@ -502,6 +511,7 @@ canvas {
 }
 .level-row #level {
     color: var(--text);
+    font-family: var(--font-tech);
     font-variant-numeric: tabular-nums;
 }
 
@@ -528,9 +538,10 @@ canvas {
 .status-row:last-child { border-bottom: 0; }
 .status-row > span[id] {
     color: var(--text);
+    font-family: var(--font-tech);
     font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0;
+    font-weight: 700;
+    letter-spacing: 0.04em;
     text-transform: none;
     font-variant-numeric: tabular-nums;
 }
@@ -1128,7 +1139,7 @@ canvas {
     display: flex;
     gap: 20px;
     justify-content: center;
-    margin: 0 0 16px;
+    margin: 0 0 8px;
     padding: 12px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -1137,6 +1148,30 @@ canvas {
     font-size: 14px;
 }
 .settings-audio label { cursor: pointer; }
+
+.settings-track-select {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 16px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+}
+.settings-track-select select {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
 
 #settings-screen .scenario-actions { justify-content: stretch; }
 #settings-screen .scenario-actions button { flex: 1; }

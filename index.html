@@ -9,7 +9,8 @@
     <title>Neon Drop</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;700;800;900&family=Syne:wght@700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
     <link rel="stylesheet" href="src/css/shell.css">
 </head>
 <body>
@@ -207,6 +208,14 @@
                 <div class="settings-audio">
                     <label><input type="checkbox" id="bgm-toggle" checked> <span data-i18n="BGM">BGM</span></label>
                     <label><input type="checkbox" id="sfx-toggle" checked> <span data-i18n="SFX">SFX</span></label>
+                </div>
+                <div class="settings-track-select">
+                    <label for="bgm-track" data-i18n="Music Track">Music Track</label>
+                    <select id="bgm-track">
+                        <option value="korobeiniki" data-i18n="Korobeiniki (Classic Tetris)">Korobeiniki (Classic Tetris)</option>
+                        <option value="cyber" data-i18n="Cyber Pulse">Cyber Pulse</option>
+                        <option value="circuit" data-i18n="Neon Circuit">Neon Circuit</option>
+                    </select>
                 </div>
             </fieldset>
             <fieldset>

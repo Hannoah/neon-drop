@@ -207,6 +207,7 @@ const playerGarbageMeter = document.getElementById('player-garbage-meter');
 
 const bgmToggle = document.getElementById('bgm-toggle');
 const sfxToggle = document.getElementById('sfx-toggle');
+const bgmTrackSelect = document.getElementById('bgm-track');
 const touchControls = document.getElementById('touch-controls');
 const modeCards = [...document.querySelectorAll('[data-mode-card]')];
 const PREFERENCES_KEY = 'neonDropPreferences';
@@ -226,8 +227,8 @@ const touchActions = {
     'touch-hold': () => playerHold(),
 };
 
-const audioSystem = createAudioSystem(bgmToggle, sfxToggle);
-const {audioCtx, startBGM, stopBGM, isBGMRunning, sounds} = audioSystem;
+const audioSystem = createAudioSystem(bgmToggle, sfxToggle, bgmTrackSelect);
+const {audioCtx, startBGM, stopBGM, isBGMRunning, setBgmTrack, getBgmTrack, sounds} = audioSystem;
 
 let dropCounter = 0;
 let dropInterval = 1000;
@@ -458,6 +459,7 @@ function writePreferences() {
             mode: gameModeSelect.value,
             bgm: bgmToggle.checked,
             sfx: sfxToggle.checked,
+            bgmTrack: bgmTrackSelect ? bgmTrackSelect.value : settings.bgmTrack,
         });
         localStorage.setItem(PREFERENCES_KEY, JSON.stringify(settings));
     } catch {
@@ -505,6 +507,10 @@ function restorePreferences() {
     }
     bgmToggle.checked = settings.bgm;
     sfxToggle.checked = settings.sfx;
+    if (bgmTrackSelect && settings.bgmTrack) {
+        bgmTrackSelect.value = settings.bgmTrack;
+        setBgmTrack(settings.bgmTrack);
+    }
     selectGameMode(gameModeSelect.value);
 }
 
@@ -1977,6 +1983,7 @@ gameModeSelect.addEventListener('change', () => {
 
 bgmToggle.addEventListener('change', writePreferences);
 sfxToggle.addEventListener('change', writePreferences);
+bgmTrackSelect?.addEventListener('change', writePreferences);
 
 gameOverMenuBtn.addEventListener('click', returnToMenu);
 playAgainBtn?.addEventListener('click', () => {
@@ -2456,6 +2463,7 @@ const exposed = {
     opponentPlayActive, scenarioUpgradeEffects,
     themeMelody, themeMelodyName,
     isBgmRunning: isBGMRunning,
+    setBgmTrack, getBgmTrack, bgmTrackSelect,
     particles, updateScore, showClearReward, sounds,
     PIECE_TYPES, SPRINT_TARGET_LINES, MARATHON_TARGET_LEVEL, MARATHON_CLEAR_BONUS,
     VERSUS_WIDTH, VERSUS_HEIGHT, MAX_PENDING_GARBAGE,
